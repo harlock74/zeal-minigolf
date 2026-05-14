@@ -32,6 +32,7 @@ add_executable(${target_name}
     src/assets.c
     src/course.c
     src/hud.c
+    src/input.c
     src/objects.c
 )
 

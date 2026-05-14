@@ -13,11 +13,11 @@
 #include "config.h"
 #include "course.h"
 #include "hud.h"
+#include "input.h"
 #include "main.h"
 #include "objects.h"
 
 gfx_context vctx;
-static uint8_t input_ready = 0;
 static uint16_t input_prev = 0;
 static uint8_t aim_input_wait = 0;
 static uint8_t aim_held_steps = 0;
@@ -63,52 +63,6 @@ static uint16_t clear_aim_input(uint16_t input)
     aim_blocked_mask = 0;
 
     return (uint16_t)(input & (uint16_t)~aim_mask);
-}
-
-static uint16_t input_read_controller(void)
-{
-    uint16_t controller_input = controller_read();
-    uint16_t unused_bits = (uint16_t)(
-        BUTTON_UNUSED1 |
-        BUTTON_UNUSED2 |
-        BUTTON_UNUSED3 |
-        BUTTON_UNUSED4);
-    uint16_t controller_buttons = (uint16_t)(
-        BUTTON_B |
-        BUTTON_Y |
-        BUTTON_SELECT |
-        BUTTON_START |
-        BUTTON_UP |
-        BUTTON_DOWN |
-        BUTTON_LEFT |
-        BUTTON_RIGHT |
-        BUTTON_A |
-        BUTTON_X |
-        BUTTON_L |
-        BUTTON_R);
-
-    /*
-     * Detached/noisy controller lines can look like impossible input states.
-     * Ignore them so keyboard input is not hidden by floating SNES bits.
-     */
-    if (controller_input & unused_bits) {
-        return 0;
-    }
-
-    if ((controller_input & controller_buttons) == controller_buttons) {
-        return 0;
-    }
-
-    return (uint16_t)(controller_input & controller_buttons);
-}
-
-static uint16_t input_read_current(void)
-{
-    if (!input_ready) {
-        return 0;
-    }
-
-    return (uint16_t)(keyboard_read() | input_read_controller());
 }
 
 static uint16_t aim_direction_mask(uint16_t input)
@@ -173,7 +127,7 @@ int main(void)
     init();
 
     while (1) {
-        uint16_t input = input_read_current();
+        uint16_t input = zgolf_input_read_current();
         uint8_t rotate_left = 0;
         uint8_t rotate_right = 0;
 
@@ -287,11 +241,9 @@ void init(void)
 
     gfx_enable_screen(0);
 
-    err = input_init(1);
+    err = zgolf_input_init();
     handle_error(err, "failed to init input", 1);
-    input_ready = 1;
-    input_flush();
-    input_prev = input_read_current();
+    input_prev = zgolf_input_read_current();
 
     err = gfx_initialize(SCREEN_MODE, &vctx);
     handle_error(err, "failed to init graphics", 1);
