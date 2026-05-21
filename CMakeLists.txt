@@ -61,7 +61,7 @@ set(GAME_COURSE_COUNT 15)
 set(COURSE_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated")
 set(COURSE_GENERATED_HEADER "${COURSE_GENERATED_DIR}/course_assets.generated.h")
 set(COURSE_GENERATED_SOURCE "${COURSE_GENERATED_DIR}/course_assets.generated.inc")
-set(COURSE_INFO_GENERATED_SOURCE "${COURSE_GENERATED_DIR}/course_infos.generated.inc")
+set(COURSE_INFO_GENERATED_SOURCE "${COURSE_GENERATED_DIR}/course_infos.generated.c")
 
 add_custom_command(
     OUTPUT "${COURSE_GENERATED_HEADER}" "${COURSE_GENERATED_SOURCE}"
@@ -109,7 +109,8 @@ add_custom_target(${target_name}_course_marker_codegen
     DEPENDS "${COURSE_INFO_GENERATED_SOURCE}"
 )
 add_dependencies(${target_name} ${target_name}_course_marker_codegen)
-target_include_directories(${target_name} PRIVATE "${COURSE_GENERATED_DIR}")
+target_sources(${target_name} PRIVATE "${COURSE_INFO_GENERATED_SOURCE}")
+target_include_directories(${target_name} PRIVATE "${COURSE_GENERATED_DIR}" "${CMAKE_SOURCE_DIR}/src")
 
 # -------------------------------
 # Assets

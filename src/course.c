@@ -5,9 +5,7 @@
 #include "config.h"
 #include "course.h"
 
-static const course_info_t course_infos[GAME_COURSE_COUNT] = {
-#include "course_infos.generated.inc"
-};
+extern const course_info_t course_infos[GAME_COURSE_COUNT];
 
 void course_load(gfx_context* ctx, uint8_t index)
 {
