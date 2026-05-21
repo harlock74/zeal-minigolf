@@ -4,23 +4,22 @@
 #include <zvb_gfx.h>
 #include <zvb_sprite.h>
 
+#include "aim.h"
 #include "config.h"
+#include "coords.h"
 #include "course.h"
 #include "objects.h"
+#include "physics.h"
+#include "ramp.h"
+#include "shot.h"
+#include "terrain.h"
 
 static gfx_sprite sprite_arena[SPRITE_ARENA_SIZE];
 static gfx_sprite* ball_sprite;
 static gfx_sprite* ball_shadow_sprite;
 static gfx_sprite* aim_markers[AIM_MARKER_COUNT];
-static uint8_t aim_direction = 0;
-static uint8_t shot_power_step = 0;
-static uint8_t shot_charge_wait = 0;
-static uint16_t strokes = 0;
 static uint8_t hole_complete = 0;
 static uint8_t water_hit = 0;
-static uint8_t ramp_air_frames = 0;
-static uint8_t ramp_air_total = 0;
-static uint8_t ramp_cooldown = 0;
 static uint16_t last_safe_x = 0;
 static uint16_t last_safe_y = 0;
 
@@ -33,158 +32,32 @@ typedef struct {
 
 static ball_state_t ball;
 
-typedef struct {
-    int8_t x;
-    int8_t y;
-} aim_vector_t;
-
-static const aim_vector_t aim_vectors[AIM_DIRECTION_COUNT] = {
-    { 127,    0 },
-    { 125,   25 },
-    { 117,   49 },
-    { 106,   71 },
-    {  90,   90 },
-    {  71,  106 },
-    {  49,  117 },
-    {  25,  125 },
-    {   0,  127 },
-    { -25,  125 },
-    { -49,  117 },
-    { -71,  106 },
-    { -90,   90 },
-    {-106,   71 },
-    {-117,   49 },
-    {-125,   25 },
-    {-127,    0 },
-    {-125,  -25 },
-    {-117,  -49 },
-    {-106,  -71 },
-    { -90,  -90 },
-    { -71, -106 },
-    { -49, -117 },
-    { -25, -125 },
-    {   0, -127 },
-    {  25, -125 },
-    {  49, -117 },
-    {  71, -106 },
-    {  90,  -90 },
-    { 106,  -71 },
-    { 117,  -49 },
-    { 125,  -25 },
-};
-
-static const uint8_t shot_power_steps[POWER_BAR_SEGMENTS] = SHOT_POWER_STEPS;
-
-static uint16_t sprite_coord_from_tile(uint8_t tile)
-{
-    /*
-     * ZVB sprite coordinates are biased by 16: coordinate 16 appears at
-     * screen pixel 0. Keep the bias explicit so gameplay math can use pixels.
-     */
-    return (uint16_t)((tile * TILE_PIXEL_SIZE) + TILE_PIXEL_SIZE);
-}
-
-static uint16_t marker_coord(uint16_t origin, int16_t vector, uint16_t distance)
-{
-    return (uint16_t)((int16_t)origin + ((vector * (int16_t)distance) >> AIM_VECTOR_SHIFT));
-}
-
-static int16_t abs_i16(int16_t value)
-{
-    if (value < 0) {
-        return (int16_t)-value;
-    }
-
-    return value;
-}
-
-static uint16_t fixed_to_sprite_coord(uint16_t value)
-{
-    return (uint16_t)(value >> FIXED_SHIFT);
-}
-
-static uint16_t fixed_to_center_pixel(uint16_t value)
-{
-    uint16_t coord = fixed_to_sprite_coord(value);
-
-    if (coord > (TILE_PIXEL_SIZE / 2)) {
-        coord = (uint16_t)(coord - (TILE_PIXEL_SIZE / 2));
-    } else {
-        coord = 0;
-    }
-
-    return coord;
-}
-
-static uint8_t fixed_to_center_tile(uint16_t value)
-{
-    return (uint8_t)(fixed_to_center_pixel(value) >> TILE_PIXEL_SHIFT);
-}
-
-static uint16_t center_pixel_to_fixed(int16_t value)
-{
-    if (value < 0) {
-        value = 0;
-    }
-
-    return (uint16_t)(((uint16_t)value + (TILE_PIXEL_SIZE / 2)) << FIXED_SHIFT);
-}
-
 static uint8_t ball_tile_at(uint16_t x, uint16_t y)
 {
-    return course_get_tile(fixed_to_center_tile(x), fixed_to_center_tile(y));
+    return course_get_tile(coords_fixed_to_center_tile(x), coords_fixed_to_center_tile(y));
 }
 
 static uint8_t ball_sample_outside_playfield(uint16_t x, uint16_t y)
 {
-    uint8_t tile_x = fixed_to_center_tile(x);
-    uint8_t tile_y = fixed_to_center_tile(y);
+    uint8_t tile_x = coords_fixed_to_center_tile(x);
+    uint8_t tile_y = coords_fixed_to_center_tile(y);
 
     return (uint8_t)(tile_x >= COURSE_TILES_W || tile_y >= PLAYFIELD_TILES_H);
 }
 
-static uint8_t tile_is_water(uint8_t tile)
-{
-    return (uint8_t)(tile >= TILE_ID_WATER_FIRST && tile <= TILE_ID_WATER_LAST);
-}
-
-static uint8_t tile_is_slash_deflector(uint8_t tile)
-{
-    return (uint8_t)(tile == TILE_ID_DEFLECT_SLASH_1 || tile == TILE_ID_DEFLECT_SLASH_2);
-}
-
-static uint8_t tile_is_backslash_deflector(uint8_t tile)
-{
-    return (uint8_t)(tile == TILE_ID_DEFLECT_BACKSLASH_1 || tile == TILE_ID_DEFLECT_BACKSLASH_2);
-}
-
-static uint8_t tile_is_deflector(uint8_t tile)
-{
-    return (uint8_t)(tile_is_slash_deflector(tile) || tile_is_backslash_deflector(tile));
-}
-
-static uint8_t tile_is_ramp(uint8_t tile)
-{
-    return (uint8_t)(
-        tile == TILE_ID_RAMP_LEFT ||
-        tile == TILE_ID_RAMP_RIGHT ||
-        tile == TILE_ID_RAMP_OPPOSITE_LEFT ||
-        tile == TILE_ID_RAMP_OPPOSITE_RIGHT);
-}
-
 static uint8_t ball_is_airborne(void)
 {
-    return (uint8_t)(ramp_air_frames > 0);
+    return ramp_is_airborne();
 }
 
 static uint8_t deflector_solid_at(uint8_t tile, uint16_t x, uint16_t y)
 {
-    uint8_t local_x = (uint8_t)(fixed_to_center_pixel(x) & TILE_PIXEL_MASK);
-    uint8_t local_y = (uint8_t)(fixed_to_center_pixel(y) & TILE_PIXEL_MASK);
+    uint8_t local_x = (uint8_t)(coords_fixed_to_center_pixel(x) & TILE_PIXEL_MASK);
+    uint8_t local_y = (uint8_t)(coords_fixed_to_center_pixel(y) & TILE_PIXEL_MASK);
     int16_t diagonal_y = local_x;
     int16_t distance;
 
-    if (tile_is_slash_deflector(tile)) {
+    if (terrain_tile_is_slash_deflector(tile)) {
         diagonal_y = (int16_t)(TILE_PIXEL_MASK - local_x);
     }
 
@@ -227,7 +100,7 @@ static uint8_t ball_collision_tile_at_offset(uint16_t x, uint16_t y, int8_t offs
     }
 
     tile = ball_tile_at((uint16_t)sample_x, (uint16_t)sample_y);
-    if (tile_is_deflector(tile) &&
+    if (terrain_tile_is_deflector(tile) &&
         !deflector_solid_at(tile, (uint16_t)sample_x, (uint16_t)sample_y)) {
         return EMPTY_TILE;
     }
@@ -245,17 +118,17 @@ static uint8_t ball_collision_tile_x(uint16_t x, uint16_t y, int16_t velocity)
     }
 
     tile = ball_collision_tile_at_offset(x, y, edge, -BALL_COLLISION_RADIUS_PIXELS);
-    if (tile == TILE_ID_WALL || tile_is_deflector(tile)) {
+    if (tile == TILE_ID_WALL || terrain_tile_is_deflector(tile)) {
         return tile;
     }
 
     tile = ball_collision_tile_at_offset(x, y, edge, 0);
-    if (tile == TILE_ID_WALL || tile_is_deflector(tile)) {
+    if (tile == TILE_ID_WALL || terrain_tile_is_deflector(tile)) {
         return tile;
     }
 
     tile = ball_collision_tile_at_offset(x, y, edge, BALL_COLLISION_RADIUS_PIXELS);
-    if (tile == TILE_ID_WALL || tile_is_deflector(tile)) {
+    if (tile == TILE_ID_WALL || terrain_tile_is_deflector(tile)) {
         return tile;
     }
 
@@ -272,17 +145,17 @@ static uint8_t ball_collision_tile_y(uint16_t x, uint16_t y, int16_t velocity)
     }
 
     tile = ball_collision_tile_at_offset(x, y, -BALL_COLLISION_RADIUS_PIXELS, edge);
-    if (tile == TILE_ID_WALL || tile_is_deflector(tile)) {
+    if (tile == TILE_ID_WALL || terrain_tile_is_deflector(tile)) {
         return tile;
     }
 
     tile = ball_collision_tile_at_offset(x, y, 0, edge);
-    if (tile == TILE_ID_WALL || tile_is_deflector(tile)) {
+    if (tile == TILE_ID_WALL || terrain_tile_is_deflector(tile)) {
         return tile;
     }
 
     tile = ball_collision_tile_at_offset(x, y, BALL_COLLISION_RADIUS_PIXELS, edge);
-    if (tile == TILE_ID_WALL || tile_is_deflector(tile)) {
+    if (tile == TILE_ID_WALL || terrain_tile_is_deflector(tile)) {
         return tile;
     }
 
@@ -316,39 +189,7 @@ static uint8_t ball_over_hole(void)
 
 static uint8_t ball_over_water(void)
 {
-    return tile_is_water(ball_tile_at(ball.x, ball.y));
-}
-
-static int16_t bounced_velocity(int16_t velocity)
-{
-    uint16_t speed = (uint16_t)abs_i16(velocity);
-
-    speed = (uint16_t)((speed * WALL_BOUNCE_FACTOR) >> FIXED_SHIFT);
-    if (speed <= BALL_STOP_SPEED) {
-        return 0;
-    }
-
-    if (velocity < 0) {
-        return (int16_t)speed;
-    }
-
-    return (int16_t)(0 - speed);
-}
-
-static int16_t deflector_bounced_velocity(int16_t velocity)
-{
-    uint16_t speed = (uint16_t)abs_i16(velocity);
-
-    speed = (uint16_t)((speed * DEFLECTOR_BOUNCE_FACTOR) >> FIXED_SHIFT);
-    if (speed <= BALL_STOP_SPEED) {
-        return 0;
-    }
-
-    if (velocity < 0) {
-        return (int16_t)(0 - speed);
-    }
-
-    return (int16_t)speed;
+    return terrain_tile_is_water(ball_tile_at(ball.x, ball.y));
 }
 
 static void deflect_velocity(uint8_t tile)
@@ -356,60 +197,13 @@ static void deflect_velocity(uint8_t tile)
     int16_t old_vx = ball.vx;
     int16_t old_vy = ball.vy;
 
-    if (tile_is_slash_deflector(tile)) {
-        ball.vx = deflector_bounced_velocity((int16_t)(0 - old_vy));
-        ball.vy = deflector_bounced_velocity((int16_t)(0 - old_vx));
+    if (terrain_tile_is_slash_deflector(tile)) {
+        ball.vx = physics_deflector_bounced_velocity((int16_t)(0 - old_vy));
+        ball.vy = physics_deflector_bounced_velocity((int16_t)(0 - old_vx));
     } else {
-        ball.vx = deflector_bounced_velocity(old_vy);
-        ball.vy = deflector_bounced_velocity(old_vx);
+        ball.vx = physics_deflector_bounced_velocity(old_vy);
+        ball.vy = physics_deflector_bounced_velocity(old_vx);
     }
-}
-
-static int16_t damp_velocity_with_friction(
-    int16_t velocity,
-    uint8_t friction,
-    uint8_t friction_shift,
-    uint8_t friction_rounding)
-{
-    uint16_t old_speed = (uint16_t)abs_i16(velocity);
-    uint16_t speed = old_speed;
-
-    if (old_speed == 0) {
-        return 0;
-    }
-
-    speed = (uint16_t)(((speed * friction) + friction_rounding) >> friction_shift);
-    if (speed >= old_speed) {
-        speed = (uint16_t)(old_speed - 1);
-    }
-
-    if (speed <= BALL_STOP_SPEED) {
-        return 0;
-    }
-
-    if (velocity < 0) {
-        return (int16_t)(0 - speed);
-    }
-
-    return (int16_t)speed;
-}
-
-static int16_t damp_velocity(int16_t velocity)
-{
-    return damp_velocity_with_friction(
-        velocity,
-        BALL_FRICTION,
-        BALL_FRICTION_SHIFT,
-        BALL_FRICTION_ROUNDING);
-}
-
-static int16_t damp_air_velocity(int16_t velocity)
-{
-    return damp_velocity_with_friction(
-        velocity,
-        RAMP_AIR_FRICTION,
-        RAMP_AIR_FRICTION_SHIFT,
-        RAMP_AIR_FRICTION_ROUNDING);
 }
 
 static void damp_ball_velocity(void)
@@ -418,16 +212,16 @@ static void damp_ball_velocity(void)
     int16_t next_vy;
 
     if (ball_is_airborne()) {
-        next_vx = damp_air_velocity(ball.vx);
-        next_vy = damp_air_velocity(ball.vy);
+        next_vx = physics_damped_air_velocity(ball.vx);
+        next_vy = physics_damped_air_velocity(ball.vy);
     } else {
-        next_vx = damp_velocity(ball.vx);
-        next_vy = damp_velocity(ball.vy);
+        next_vx = physics_damped_velocity(ball.vx);
+        next_vy = physics_damped_velocity(ball.vy);
     }
 
     if (ball.vx != 0 && ball.vy != 0 &&
-        (abs_i16(next_vx) <= BALL_DIAGONAL_STOP_SPEED ||
-         abs_i16(next_vy) <= BALL_DIAGONAL_STOP_SPEED)) {
+        (physics_abs_i16(next_vx) <= BALL_DIAGONAL_STOP_SPEED ||
+         physics_abs_i16(next_vy) <= BALL_DIAGONAL_STOP_SPEED)) {
         ball.vx = 0;
         ball.vy = 0;
         return;
@@ -437,87 +231,33 @@ static void damp_ball_velocity(void)
     ball.vy = next_vy;
 }
 
-static uint8_t ball_speed_for_ramp(void)
-{
-    uint16_t speed = (uint16_t)abs_i16(ball.vx);
-    uint16_t speed_y = (uint16_t)abs_i16(ball.vy);
-
-    if (speed_y > speed) {
-        speed = speed_y;
-    }
-
-    if (speed > 255) {
-        return 255;
-    }
-
-    return (uint8_t)speed;
-}
-
-static int16_t failed_ramp_rebound_velocity(int16_t velocity)
-{
-    uint16_t speed = (uint16_t)abs_i16(velocity);
-
-    if (speed == 0) {
-        return 0;
-    }
-
-    speed = (uint16_t)((speed * RAMP_FAILED_REBOUND_NUMERATOR) >> RAMP_FAILED_REBOUND_SHIFT);
-    if (speed < RAMP_FAILED_MIN_REBOUND_SPEED) {
-        speed = RAMP_FAILED_MIN_REBOUND_SPEED;
-    }
-
-    if (velocity < 0) {
-        return (int16_t)speed;
-    }
-
-    return (int16_t)(0 - speed);
-}
-
 static void move_ball_outside_failed_ramp(void)
 {
-    uint8_t tile_x = fixed_to_center_tile(ball.x);
-    uint8_t tile_y = fixed_to_center_tile(ball.y);
+    uint8_t tile_x = coords_fixed_to_center_tile(ball.x);
+    uint8_t tile_y = coords_fixed_to_center_tile(ball.y);
     int16_t center;
 
-    if (abs_i16(ball.vy) >= abs_i16(ball.vx)) {
+    if (physics_abs_i16(ball.vy) >= physics_abs_i16(ball.vx)) {
         if (ball.vy < 0) {
             center = (int16_t)(((uint16_t)(tile_y + 1) << TILE_PIXEL_SHIFT) +
                 BALL_COLLISION_RADIUS_PIXELS + 1);
-            ball.y = center_pixel_to_fixed(center);
+            ball.y = coords_center_pixel_to_fixed(center);
         } else {
             center = (int16_t)(((uint16_t)tile_y << TILE_PIXEL_SHIFT) -
                 BALL_COLLISION_RADIUS_PIXELS - 1);
-            ball.y = center_pixel_to_fixed(center);
+            ball.y = coords_center_pixel_to_fixed(center);
         }
     } else {
         if (ball.vx < 0) {
             center = (int16_t)(((uint16_t)(tile_x + 1) << TILE_PIXEL_SHIFT) +
                 BALL_COLLISION_RADIUS_PIXELS + 1);
-            ball.x = center_pixel_to_fixed(center);
+            ball.x = coords_center_pixel_to_fixed(center);
         } else {
             center = (int16_t)(((uint16_t)tile_x << TILE_PIXEL_SHIFT) -
                 BALL_COLLISION_RADIUS_PIXELS - 1);
-            ball.x = center_pixel_to_fixed(center);
+            ball.x = coords_center_pixel_to_fixed(center);
         }
     }
-}
-
-static uint8_t ramp_arc_offset(void)
-{
-    uint8_t half;
-    uint8_t progress;
-
-    if (!ball_is_airborne() || ramp_air_total < 2) {
-        return 0;
-    }
-
-    half = (uint8_t)(ramp_air_total >> 1);
-    progress = (uint8_t)(ramp_air_total - ramp_air_frames);
-    if (progress > half) {
-        progress = (uint8_t)(ramp_air_total - progress);
-    }
-
-    return (uint8_t)((progress * RAMP_ARC_MAX_PIXELS) / half);
 }
 
 static void update_ball_sprite_position(void)
@@ -529,8 +269,8 @@ static void update_ball_sprite_position(void)
         return;
     }
 
-    ball_sprite->x = fixed_to_sprite_coord(ball.x);
-    sprite_y = fixed_to_sprite_coord(ball.y);
+    ball_sprite->x = coords_fixed_to_sprite(ball.x);
+    sprite_y = coords_fixed_to_sprite(ball.y);
     arc_offset = ramp_arc_offset();
     if (sprite_y > arc_offset) {
         sprite_y = (uint16_t)(sprite_y - arc_offset);
@@ -543,92 +283,40 @@ static void update_ball_sprite_position(void)
         return;
     }
 
-    ball_shadow_sprite->x = fixed_to_sprite_coord(ball.x);
-    ball_shadow_sprite->y = fixed_to_sprite_coord(ball.y);
+    ball_shadow_sprite->x = coords_fixed_to_sprite(ball.x);
+    ball_shadow_sprite->y = coords_fixed_to_sprite(ball.y);
     ball_shadow_sprite->tile = ball_is_airborne() ? TILE_ID_BALL_SHADOW : EMPTY_TILE;
 }
 
 static uint8_t start_ramp_jump(void)
 {
-    uint8_t air_frames;
+    uint8_t speed;
+    uint8_t ramp_tile;
 
-    if (ball_is_airborne() || ramp_cooldown > 0) {
+    if (!ramp_can_start()) {
         return 0;
     }
 
-    if (!tile_is_ramp(ball_tile_at(ball.x, ball.y))) {
+    ramp_tile = ball_tile_at(ball.x, ball.y);
+    if (!ramp_tile_is(ramp_tile)) {
         return 0;
     }
 
-    if (ball_speed_for_ramp() < RAMP_MIN_SPEED) {
+    if (!ramp_accepts_direction(ramp_tile, ball.vx, ball.vy)) {
+        return 0;
+    }
+
+    speed = physics_speed_u8(ball.vx, ball.vy);
+    if (speed < RAMP_MIN_SPEED) {
         move_ball_outside_failed_ramp();
-        ball.vx = failed_ramp_rebound_velocity(ball.vx);
-        ball.vy = failed_ramp_rebound_velocity(ball.vy);
-        ramp_cooldown = RAMP_FAILED_COOLDOWN_FRAMES;
+        ball.vx = ramp_failed_rebound_velocity(ball.vx);
+        ball.vy = ramp_failed_rebound_velocity(ball.vy);
+        ramp_start_failed_rebound();
         return 1;
     }
 
-    air_frames = (uint8_t)(ball_speed_for_ramp() >> RAMP_AIR_SPEED_SHIFT);
-    if (air_frames < RAMP_MIN_AIR_FRAMES) {
-        air_frames = RAMP_MIN_AIR_FRAMES;
-    }
-    if (air_frames > RAMP_MAX_AIR_FRAMES) {
-        air_frames = RAMP_MAX_AIR_FRAMES;
-    }
-
-    ramp_air_frames = air_frames;
-    ramp_air_total = air_frames;
-    ramp_cooldown = RAMP_COOLDOWN_FRAMES;
-    ball.vx = (int16_t)((ball.vx * RAMP_LAUNCH_SPEED_NUMERATOR) >> RAMP_LAUNCH_SPEED_SHIFT);
-    ball.vy = (int16_t)((ball.vy * RAMP_LAUNCH_SPEED_NUMERATOR) >> RAMP_LAUNCH_SPEED_SHIFT);
+    ramp_start_jump(speed, &ball.vx, &ball.vy);
     return 0;
-}
-
-static void update_ramp_state(void)
-{
-    if (ramp_cooldown > 0) {
-        ramp_cooldown--;
-    }
-
-    if (ramp_air_frames > 0) {
-        ramp_air_frames--;
-        if (ramp_air_frames == 0) {
-            ramp_air_total = 0;
-        }
-    }
-}
-
-static uint8_t power_bar_fill_count(void)
-{
-    return (uint8_t)(shot_power_step + 1);
-}
-
-static int16_t limited_motion_step(int16_t remaining)
-{
-    if (remaining > BALL_MAX_STEP_FIXED) {
-        return BALL_MAX_STEP_FIXED;
-    }
-
-    if (remaining < -BALL_MAX_STEP_FIXED) {
-        return -BALL_MAX_STEP_FIXED;
-    }
-
-    return remaining;
-}
-
-static uint16_t add_velocity_clamped(uint16_t position, int16_t velocity, uint16_t max_position)
-{
-    int16_t next = (int16_t)position + velocity;
-
-    if (next < BALL_MIN_FIXED) {
-        return BALL_MIN_FIXED;
-    }
-
-    if ((uint16_t)next > max_position) {
-        return max_position;
-    }
-
-    return (uint16_t)next;
 }
 
 static void move_ball_x(void)
@@ -636,16 +324,16 @@ static void move_ball_x(void)
     int16_t remaining = ball.vx;
 
     while (remaining != 0) {
-        int16_t step = limited_motion_step(remaining);
-        uint16_t next = add_velocity_clamped(ball.x, step, BALL_MAX_X_FIXED);
+        int16_t step = physics_limited_motion_step(remaining);
+        uint16_t next = physics_add_velocity_clamped(ball.x, step, BALL_MAX_X_FIXED);
         uint8_t tile = ball_collision_tile_x(next, ball.y, step);
 
         if (tile == TILE_ID_WALL) {
-            ball.vx = bounced_velocity(ball.vx);
+            ball.vx = physics_wall_bounced_velocity(ball.vx);
             return;
         }
 
-        if (tile_is_deflector(tile)) {
+        if (terrain_tile_is_deflector(tile)) {
             deflect_velocity(tile);
             return;
         }
@@ -660,16 +348,16 @@ static void move_ball_y(void)
     int16_t remaining = ball.vy;
 
     while (remaining != 0) {
-        int16_t step = limited_motion_step(remaining);
-        uint16_t next = add_velocity_clamped(ball.y, step, BALL_MAX_Y_FIXED);
+        int16_t step = physics_limited_motion_step(remaining);
+        uint16_t next = physics_add_velocity_clamped(ball.y, step, BALL_MAX_Y_FIXED);
         uint8_t tile = ball_collision_tile_y(ball.x, next, step);
 
         if (tile == TILE_ID_WALL) {
-            ball.vy = bounced_velocity(ball.vy);
+            ball.vy = physics_wall_bounced_velocity(ball.vy);
             return;
         }
 
-        if (tile_is_deflector(tile)) {
+        if (terrain_tile_is_deflector(tile)) {
             deflect_velocity(tile);
             return;
         }
@@ -687,9 +375,7 @@ static void ball_set_position(uint16_t x, uint16_t y)
     ball.vy = 0;
     last_safe_x = ball.x;
     last_safe_y = ball.y;
-    ramp_air_frames = 0;
-    ramp_air_total = 0;
-    ramp_cooldown = 0;
+    ramp_reset();
     water_hit = 0;
     hole_complete = 0;
 
@@ -724,9 +410,7 @@ static void ball_reset_to_last_safe(void)
     ball.y = last_safe_y;
     ball.vx = 0;
     ball.vy = 0;
-    ramp_air_frames = 0;
-    ramp_air_total = 0;
-    ramp_cooldown = 0;
+    ramp_reset();
     hole_complete = 0;
 
     if (ball_sprite != 0) {
@@ -743,8 +427,8 @@ zos_err_t objects_init(void)
     gfx_error err;
     uint8_t i;
     const course_info_t* course = course_get_info();
-    uint16_t ball_x = sprite_coord_from_tile(course->ball_x);
-    uint16_t ball_y = sprite_coord_from_tile(course->ball_y);
+    uint16_t ball_x = coords_sprite_from_tile(course->ball_x);
+    uint16_t ball_y = coords_sprite_from_tile(course->ball_y);
     gfx_sprite sprite = {
         .y = ball_y,
         .x = ball_x,
@@ -789,7 +473,7 @@ zos_err_t objects_init(void)
 
 void objects_reset_ball_to_tile(uint8_t tile_x, uint8_t tile_y)
 {
-    ball_set_position(sprite_coord_from_tile(tile_x), sprite_coord_from_tile(tile_y));
+    ball_set_position(coords_sprite_from_tile(tile_x), coords_sprite_from_tile(tile_y));
     show_aim_markers();
     objects_update_aim_markers();
 }
@@ -800,12 +484,7 @@ void objects_aim_left(void)
         return;
     }
 
-    if (aim_direction == 0) {
-        aim_direction = AIM_DIRECTION_COUNT - 1;
-    } else {
-        aim_direction--;
-    }
-
+    aim_rotate_left();
     objects_update_aim_markers();
 }
 
@@ -815,11 +494,7 @@ void objects_aim_right(void)
         return;
     }
 
-    aim_direction++;
-    if (aim_direction >= AIM_DIRECTION_COUNT) {
-        aim_direction = 0;
-    }
-
+    aim_rotate_right();
     objects_update_aim_markers();
 }
 
@@ -830,8 +505,7 @@ void objects_begin_charge(void)
     }
 
     water_hit = 0;
-    shot_power_step = 0;
-    shot_charge_wait = POWER_BAR_STEP_FRAMES;
+    shot_begin_charge();
 }
 
 void objects_charge_shot(void)
@@ -840,18 +514,7 @@ void objects_charge_shot(void)
         return;
     }
 
-    if (shot_charge_wait > 0) {
-        shot_charge_wait--;
-        return;
-    }
-
-    shot_charge_wait = POWER_BAR_STEP_FRAMES;
-
-    if (shot_power_step < (POWER_BAR_SEGMENTS - 1)) {
-        shot_power_step++;
-    } else {
-        shot_power_step = 0;
-    }
+    shot_charge_tick();
 }
 
 void objects_release_shot(void)
@@ -863,20 +526,20 @@ void objects_release_shot(void)
         return;
     }
 
-    dx = aim_vectors[aim_direction].x;
-    dy = aim_vectors[aim_direction].y;
+    dx = aim_vector_x();
+    dy = aim_vector_y();
 
     last_safe_x = ball.x;
     last_safe_y = ball.y;
-    ball.vx = (int16_t)((dx * shot_power_steps[shot_power_step]) >> SHOT_VELOCITY_SHIFT);
-    ball.vy = (int16_t)((dy * shot_power_steps[shot_power_step]) >> SHOT_VELOCITY_SHIFT);
-    strokes++;
+    ball.vx = shot_velocity_from_vector(dx);
+    ball.vy = shot_velocity_from_vector(dy);
+    shot_count_stroke();
     hide_aim_markers();
 }
 
 uint8_t objects_get_power_segments(void)
 {
-    return power_bar_fill_count();
+    return shot_power_segments();
 }
 
 uint8_t objects_water_was_hit(void)
@@ -896,7 +559,7 @@ void objects_update_ball(void)
     if (!start_ramp_jump()) {
         damp_ball_velocity();
     }
-    update_ramp_state();
+    ramp_update();
 
     if (!ball_is_airborne() && ball_over_water()) {
         water_hit = 1;
@@ -911,8 +574,8 @@ void objects_update_ball(void)
 
     if (!ball_is_airborne() &&
         ball_over_hole() &&
-        abs_i16(ball.vx) <= BALL_HOLE_MAX_SPEED &&
-        abs_i16(ball.vy) <= BALL_HOLE_MAX_SPEED) {
+        physics_abs_i16(ball.vx) <= BALL_HOLE_MAX_SPEED &&
+        physics_abs_i16(ball.vy) <= BALL_HOLE_MAX_SPEED) {
         ball.vx = 0;
         ball.vy = 0;
         hole_complete = 1;
@@ -932,8 +595,8 @@ void objects_update_ball(void)
 void objects_update_aim_markers(void)
 {
     uint8_t i;
-    int16_t dx = aim_vectors[aim_direction].x;
-    int16_t dy = aim_vectors[aim_direction].y;
+    int16_t dx = aim_vector_x();
+    int16_t dy = aim_vector_y();
 
     if (ball_sprite == 0) {
         return;
@@ -945,8 +608,8 @@ void objects_update_aim_markers(void)
 
     for (i = 0; i < AIM_MARKER_COUNT; i++) {
         uint16_t distance = (uint16_t)((i + 1) * AIM_MARKER_SPACING_PIXELS);
-        aim_markers[i]->x = marker_coord(ball_sprite->x, dx, distance);
-        aim_markers[i]->y = marker_coord(ball_sprite->y, dy, distance);
+        aim_markers[i]->x = aim_marker_coord(ball_sprite->x, dx, distance);
+        aim_markers[i]->y = aim_marker_coord(ball_sprite->y, dy, distance);
     }
 }
 
@@ -962,12 +625,12 @@ uint8_t objects_hole_is_complete(void)
 
 uint16_t objects_get_strokes(void)
 {
-    return strokes;
+    return shot_get_strokes();
 }
 
 void objects_reset_strokes(void)
 {
-    strokes = 0;
+    shot_reset_strokes();
 }
 
 void objects_render(gfx_context* ctx)

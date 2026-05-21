@@ -9,6 +9,7 @@
 #include <zgdk.h>
 #include <zgdk/tilemap/scroll.h>
 
+#include "aim_input.h"
 #include "assets.h"
 #include "config.h"
 #include "course.h"
@@ -19,10 +20,7 @@
 
 gfx_context vctx;
 static uint16_t input_prev = 0;
-static uint8_t aim_input_wait = 0;
-static uint8_t aim_held_steps = 0;
-static uint16_t aim_held_mask = 0;
-static uint16_t aim_blocked_mask = 0;
+static aim_input_state_t aim_input_state;
 static uint8_t charging_shot = 0;
 static int16_t total_score = 0;
 
@@ -52,84 +50,6 @@ static void load_course(uint8_t index)
     charging_shot = 0;
 }
 
-static uint16_t clear_aim_input(uint16_t input)
-{
-    const uint16_t aim_mask = BUTTON_LEFT | BUTTON_RIGHT;
-
-    input_prev &= (uint16_t)~aim_mask;
-    aim_input_wait = 0;
-    aim_held_steps = 0;
-    aim_held_mask = 0;
-    aim_blocked_mask = 0;
-
-    return (uint16_t)(input & (uint16_t)~aim_mask);
-}
-
-static uint16_t aim_direction_mask(uint16_t input)
-{
-    const uint16_t aim_mask = BUTTON_LEFT | BUTTON_RIGHT;
-
-    if ((input & aim_mask) == BUTTON_LEFT) {
-        return BUTTON_LEFT;
-    }
-
-    if ((input & aim_mask) == BUTTON_RIGHT) {
-        return BUTTON_RIGHT;
-    }
-
-    return 0;
-}
-
-static uint16_t filter_aim_input(uint16_t input)
-{
-    const uint16_t aim_mask = BUTTON_LEFT | BUTTON_RIGHT;
-    uint16_t direction = aim_direction_mask(input);
-
-    if (direction == 0 || objects_ball_is_rolling()) {
-        aim_held_steps = 0;
-        aim_held_mask = 0;
-        aim_blocked_mask = 0;
-        return input;
-    }
-
-    if (input & SHOOT_BUTTON_MASK) {
-        aim_held_steps = 0;
-        aim_held_mask = 0;
-        aim_blocked_mask = 0;
-        return (uint16_t)(input & (uint16_t)~aim_mask);
-    }
-
-    if (direction != aim_held_mask) {
-        aim_held_steps = 0;
-        aim_held_mask = direction;
-        aim_blocked_mask = 0;
-    }
-
-    return (uint16_t)(input & (uint16_t)~aim_blocked_mask);
-}
-
-static void note_aim_rotation(uint16_t direction)
-{
-    if (direction == 0) {
-        return;
-    }
-
-    if (direction != aim_held_mask) {
-        aim_held_steps = 0;
-        aim_held_mask = direction;
-        aim_blocked_mask = 0;
-    }
-
-    if (aim_held_steps < AIM_INPUT_MAX_HELD_STEPS) {
-        aim_held_steps++;
-    }
-
-    if (aim_held_steps >= AIM_INPUT_MAX_HELD_STEPS) {
-        aim_blocked_mask = direction;
-        aim_input_wait = 0;
-    }
-}
-
 int main(void)
 {
     init();
@@ -139,46 +59,33 @@ int main(void)
         uint8_t rotate_left = 0;
         uint8_t rotate_right = 0;
 
-        input = filter_aim_input(input);
+        input = aim_input_filter(&aim_input_state, input, objects_ball_is_rolling());
 
         if ((input & EXIT_BUTTON_MASK) && !(input_prev & EXIT_BUTTON_MASK)) {
             deinit();
             exit(0);
         }
 
-        if (aim_input_wait > 0) {
-            aim_input_wait--;
-        }
-
-        if (!(input & (BUTTON_LEFT | BUTTON_RIGHT)) ||
-            ((input & BUTTON_LEFT) && (input & BUTTON_RIGHT))) {
-            aim_input_wait = 0;
-        }
-
-        if (!objects_ball_is_rolling() && !((input & BUTTON_LEFT) && (input & BUTTON_RIGHT))) {
-            if ((input & BUTTON_LEFT) && !(input_prev & BUTTON_LEFT)) {
-                rotate_left = 1;
-            } else if ((input & BUTTON_LEFT) && !(input & BUTTON_RIGHT) && aim_input_wait == 0) {
-                rotate_left = 1;
-            }
-
-            if ((input & BUTTON_RIGHT) && !(input_prev & BUTTON_RIGHT)) {
-                rotate_right = 1;
-            } else if ((input & BUTTON_RIGHT) && !(input & BUTTON_LEFT) && aim_input_wait == 0) {
-                rotate_right = 1;
-            }
-        }
+        aim_input_tick(&aim_input_state, input);
+        rotate_left = aim_input_should_rotate_left(
+            &aim_input_state,
+            input,
+            input_prev,
+            objects_ball_is_rolling());
+        rotate_right = aim_input_should_rotate_right(
+            &aim_input_state,
+            input,
+            input_prev,
+            objects_ball_is_rolling());
 
         if (rotate_left) {
             objects_aim_left();
-            note_aim_rotation(BUTTON_LEFT);
-            aim_input_wait = AIM_INPUT_REPEAT_FRAMES;
+            aim_input_note_rotation(&aim_input_state, BUTTON_LEFT);
         }
 
         if (rotate_right) {
             objects_aim_right();
-            note_aim_rotation(BUTTON_RIGHT);
-            aim_input_wait = AIM_INPUT_REPEAT_FRAMES;
+            aim_input_note_rotation(&aim_input_state, BUTTON_RIGHT);
         }
 
         if (!objects_ball_is_rolling() &&
@@ -186,7 +93,7 @@ int main(void)
             !(input_prev & SHOOT_BUTTON_MASK)) {
             charging_shot = 1;
             objects_begin_charge();
-            input = clear_aim_input(input);
+            input = aim_input_clear(&aim_input_state, input, &input_prev);
         }
 
         if ((input & SHOOT_BUTTON_MASK) && charging_shot) {
@@ -196,7 +103,7 @@ int main(void)
         if (!(input & SHOOT_BUTTON_MASK) && charging_shot) {
             charging_shot = 0;
             objects_release_shot();
-            input = clear_aim_input(input);
+            input = aim_input_clear(&aim_input_state, input, &input_prev);
         }
 
         objects_update_ball();

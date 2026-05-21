@@ -7,6 +7,7 @@
 #include "hud.h"
 
 static char hud_number[HUD_NUMBER_WIDTH];
+static char hud_score[HUD_SCORE_WIDTH];
 
 static void format_two_digits(uint8_t value)
 {
@@ -18,17 +19,36 @@ static void format_two_digits(uint8_t value)
     hud_number[1] = (char)('0' + (value % 10));
 }
 
-static uint8_t score_display_value(int16_t score)
+static void format_golf_score(int16_t score)
 {
-    if (score <= 0) {
-        return 0;
+    uint8_t value;
+
+    hud_score[2] = ' ';
+
+    if (score == 0) {
+        hud_score[0] = 'E';
+        hud_score[1] = ' ';
+        return;
+    }
+
+    if (score < 0) {
+        hud_score[0] = '-';
+        score = (int16_t)(0 - score);
+    } else {
+        hud_score[0] = '+';
     }
 
     if (score > 99) {
-        return 99;
+        score = 99;
     }
 
-    return (uint8_t)score;
+    value = (uint8_t)score;
+    if (value > 9) {
+        hud_score[1] = (char)('0' + (value / 10));
+        hud_score[2] = (char)('0' + (value % 10));
+    } else {
+        hud_score[1] = (char)('0' + value);
+    }
 }
 
 void hud_init(void)
@@ -37,6 +57,8 @@ void hud_init(void)
     ascii_map('0', 10, FONT_DIGIT_TILE);
     ascii_map('A', 26, FONT_ALPHA_A_TILE);
     ascii_map('a', 26, FONT_ALPHA_A_TILE);
+    ascii_map('+', 1, TILE_ID_SCORE_PLUS);
+    ascii_map('-', 1, TILE_ID_SCORE_MINUS);
 }
 
 void hud_render_static(gfx_context* ctx)
@@ -65,8 +87,8 @@ void hud_render_values(gfx_context* ctx, uint8_t course, uint8_t par, uint16_t s
     format_two_digits((uint8_t)strokes);
     nprint_string(ctx, hud_number, HUD_NUMBER_WIDTH, HUD_STROKE_VALUE_X, HUD_STROKE_LABEL_Y);
 
-    format_two_digits(score_display_value(score));
-    nprint_string(ctx, hud_number, HUD_NUMBER_WIDTH, HUD_SCORE_VALUE_X, HUD_SCORE_LABEL_Y);
+    format_golf_score(score);
+    nprint_string(ctx, hud_score, HUD_SCORE_WIDTH, HUD_SCORE_VALUE_X, HUD_SCORE_LABEL_Y);
 }
 
 void hud_render_power_bar(gfx_context* ctx, uint8_t visible, uint8_t filled)

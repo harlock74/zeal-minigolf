@@ -29,11 +29,18 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 # -------------------------------
 add_executable(${target_name}
     src/main.c
+    src/aim.c
+    src/aim_input.c
     src/assets.c
+    src/coords.c
     src/course.c
     src/hud.c
     src/input.c
     src/objects.c
+    src/physics.c
+    src/ramp.c
+    src/shot.c
+    src/terrain.c
 )
 
 # -------------------------------
