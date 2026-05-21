@@ -82,13 +82,21 @@ static uint16_t aim_direction_mask(uint16_t input)
 
 static uint16_t filter_aim_input(uint16_t input)
 {
+    const uint16_t aim_mask = BUTTON_LEFT | BUTTON_RIGHT;
     uint16_t direction = aim_direction_mask(input);
 
-    if (direction == 0 || (input & SHOOT_BUTTON_MASK) || objects_ball_is_rolling()) {
+    if (direction == 0 || objects_ball_is_rolling()) {
         aim_held_steps = 0;
         aim_held_mask = 0;
         aim_blocked_mask = 0;
         return input;
+    }
+
+    if (input & SHOOT_BUTTON_MASK) {
+        aim_held_steps = 0;
+        aim_held_mask = 0;
+        aim_blocked_mask = 0;
+        return (uint16_t)(input & (uint16_t)~aim_mask);
     }
 
     if (direction != aim_held_mask) {

@@ -57,9 +57,11 @@ target_link_libraries(${target_name} PUBLIC zgdk)
 # -------------------------------
 set(COURSE_WIDTH_TILES 40)
 set(COURSE_HEIGHT_TILES 30)
+set(GAME_COURSE_COUNT 15)
 set(COURSE_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated")
 set(COURSE_GENERATED_HEADER "${COURSE_GENERATED_DIR}/course_assets.generated.h")
 set(COURSE_GENERATED_SOURCE "${COURSE_GENERATED_DIR}/course_assets.generated.inc")
+set(COURSE_INFO_GENERATED_SOURCE "${COURSE_GENERATED_DIR}/course_infos.generated.inc")
 
 add_custom_command(
     OUTPUT "${COURSE_GENERATED_HEADER}" "${COURSE_GENERATED_SOURCE}"
@@ -82,6 +84,31 @@ add_custom_target(${target_name}_course_asset_codegen
     DEPENDS "${COURSE_GENERATED_HEADER}" "${COURSE_GENERATED_SOURCE}"
 )
 add_dependencies(${target_name} ${target_name}_course_asset_codegen)
+
+add_custom_command(
+    OUTPUT "${COURSE_INFO_GENERATED_SOURCE}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${COURSE_GENERATED_DIR}"
+    COMMAND ${Python3_EXECUTABLE}
+            "${CMAKE_SOURCE_DIR}/tools/gen_course_markers.py"
+            --tmx "${CMAKE_SOURCE_DIR}/assets/minigolf.tmx"
+            --course-width-tiles ${COURSE_WIDTH_TILES}
+            --course-height-tiles ${COURSE_HEIGHT_TILES}
+            --tile-size 16
+            --course-count ${GAME_COURSE_COUNT}
+            --config "${CMAKE_SOURCE_DIR}/src/config.h"
+            --output "${COURSE_INFO_GENERATED_SOURCE}"
+    DEPENDS
+            "${CMAKE_SOURCE_DIR}/tools/gen_course_markers.py"
+            "${CMAKE_SOURCE_DIR}/assets/minigolf.tmx"
+            "${CMAKE_SOURCE_DIR}/src/config.h"
+    COMMENT "Generating course marker metadata"
+    VERBATIM
+)
+
+add_custom_target(${target_name}_course_marker_codegen
+    DEPENDS "${COURSE_INFO_GENERATED_SOURCE}"
+)
+add_dependencies(${target_name} ${target_name}_course_marker_codegen)
 target_include_directories(${target_name} PRIVATE "${COURSE_GENERATED_DIR}")
 
 # -------------------------------

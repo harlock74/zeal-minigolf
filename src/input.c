@@ -1,14 +1,125 @@
 #include <stdint.h>
 
+#include <core.h>
+#include <zos_keyboard.h>
+#include <zos_sys.h>
+#include <zos_vfs.h>
 #include <zgdk/input.h>
 
 #include "input.h"
 
 enum {
     INPUT_USE_CONTROLLER = 1,
+    KEYBOARD_BUFFER_SIZE = 32,
 };
 
 static uint8_t input_ready = 0;
+static uint8_t keyboard_buffer[KEYBOARD_BUFFER_SIZE];
+static uint8_t keyboard_release_pending = 0;
+static uint16_t keyboard_state = 0;
+
+static void keyboard_apply_button(uint16_t button, uint8_t released)
+{
+    if (released) {
+        keyboard_state &= (uint16_t)~button;
+    } else {
+        keyboard_state |= button;
+    }
+}
+
+static void keyboard_apply_vertical(uint16_t button, uint16_t opposite, uint8_t released)
+{
+    if (released) {
+        keyboard_state &= (uint16_t)~button;
+    } else {
+        keyboard_state = (uint16_t)((keyboard_state & (uint16_t)~opposite) | button);
+    }
+}
+
+static void keyboard_apply_horizontal(uint16_t button, uint16_t opposite, uint8_t released)
+{
+    if (released) {
+        keyboard_state &= (uint16_t)~button;
+    } else {
+        keyboard_state = (uint16_t)((keyboard_state & (uint16_t)~opposite) | button);
+    }
+}
+
+static void keyboard_apply_key(uint8_t key, uint8_t released)
+{
+    switch (key) {
+    case KB_UP_ARROW:
+        keyboard_apply_vertical(BUTTON_UP, BUTTON_DOWN, released);
+        break;
+    case KB_DOWN_ARROW:
+        keyboard_apply_vertical(BUTTON_DOWN, BUTTON_UP, released);
+        break;
+    case KB_LEFT_ARROW:
+        keyboard_apply_horizontal(BUTTON_LEFT, BUTTON_RIGHT, released);
+        break;
+    case KB_RIGHT_ARROW:
+        keyboard_apply_horizontal(BUTTON_RIGHT, BUTTON_LEFT, released);
+        break;
+    case KB_KEY_ENTER:
+        keyboard_apply_button(BUTTON_START, released);
+        break;
+    case KB_RIGHT_SHIFT:
+    case KB_KEY_QUOTE:
+        keyboard_apply_button(BUTTON_SELECT, released);
+        break;
+    case KB_KEY_Z:
+    case KB_KEY_SPACE:
+        keyboard_apply_button(BUTTON_B, released);
+        break;
+    case KB_KEY_X:
+        keyboard_apply_button(BUTTON_A, released);
+        break;
+    case KB_KEY_A:
+        keyboard_apply_button(BUTTON_Y, released);
+        break;
+    case KB_KEY_S:
+        keyboard_apply_button(BUTTON_X, released);
+        break;
+    case KB_KEY_Q:
+        keyboard_apply_button(BUTTON_L, released);
+        break;
+    case KB_KEY_W:
+        keyboard_apply_button(BUTTON_R, released);
+        break;
+    default:
+        break;
+    }
+}
+
+static uint16_t input_read_keyboard(void)
+{
+    uint16_t size = KEYBOARD_BUFFER_SIZE;
+
+    while (1) {
+        uint8_t i;
+        zos_err_t err = read(DEV_STDIN, keyboard_buffer, &size);
+        if (err != ERR_SUCCESS) {
+            keyboard_state = 0;
+            keyboard_release_pending = 0;
+            return keyboard_state;
+        }
+
+        if (size == 0) {
+            return keyboard_state;
+        }
+
+        for (i = 0; i < size; i++) {
+            if (keyboard_buffer[i] == KB_RELEASED) {
+                keyboard_release_pending = 1;
+            } else {
+                keyboard_apply_key(keyboard_buffer[i], keyboard_release_pending);
+                keyboard_release_pending = 0;
+            }
+        }
+
+        size = KEYBOARD_BUFFER_SIZE;
+    }
+}
 
 static uint16_t input_read_controller(void)
 {
@@ -67,10 +178,12 @@ uint16_t zgolf_input_read_current(void)
         return 0;
     }
 
-    return (uint16_t)(keyboard_read() | input_read_controller());
+    return (uint16_t)(input_read_keyboard() | input_read_controller());
 }
 
 void zgolf_input_flush(void)
 {
     input_flush();
+    keyboard_state = 0;
+    keyboard_release_pending = 0;
 }
