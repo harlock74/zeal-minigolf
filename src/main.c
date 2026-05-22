@@ -177,7 +177,7 @@ void init(void)
     tilemap_fill(&vctx, COURSE_LAYER, EMPTY_TILE, 0, 0, SCREEN_TILES_W, SCREEN_TILES_H);
     tilemap_fill(&vctx, UI_LAYER, EMPTY_TILE, 0, 0, SCREEN_TILES_W, SCREEN_TILES_H);
 
-    course_load(&vctx, 0);
+    course_load(&vctx, START_COURSE_INDEX);
 
     err = objects_init();
     handle_error(err, "failed to init objects", 1);

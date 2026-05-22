@@ -52,19 +52,19 @@ uint8_t ramp_can_start(void)
 uint8_t ramp_tile_is(uint8_t tile)
 {
     return (uint8_t)(
-        tile == TILE_ID_RAMP_LEFT ||
-        tile == TILE_ID_RAMP_RIGHT ||
-        tile == TILE_ID_RAMP_OPPOSITE_LEFT ||
-        tile == TILE_ID_RAMP_OPPOSITE_RIGHT);
+        tile == TILE_ID_RAMP_UP_LEFT ||
+        tile == TILE_ID_RAMP_UP_RIGHT ||
+        tile == TILE_ID_RAMP_RIGHT_LEFT ||
+        tile == TILE_ID_RAMP_RIGHT_RIGHT);
 }
 
 uint8_t ramp_accepts_direction(uint8_t tile, int16_t vx, int16_t vy)
 {
-    if (tile == TILE_ID_RAMP_LEFT || tile == TILE_ID_RAMP_RIGHT) {
+    if (tile == TILE_ID_RAMP_UP_LEFT || tile == TILE_ID_RAMP_UP_RIGHT) {
         return (uint8_t)(vy < 0 && ramp_abs_i16(vy) >= ramp_abs_i16(vx));
     }
 
-    if (tile == TILE_ID_RAMP_OPPOSITE_LEFT || tile == TILE_ID_RAMP_OPPOSITE_RIGHT) {
+    if (tile == TILE_ID_RAMP_RIGHT_LEFT || tile == TILE_ID_RAMP_RIGHT_RIGHT) {
         return (uint8_t)(vx > 0 && ramp_abs_i16(vx) >= ramp_abs_i16(vy));
     }
 

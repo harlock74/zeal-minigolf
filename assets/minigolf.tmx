@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="200" height="90" tilewidth="16" tileheight="16" infinite="0" nextlayerid="9" nextobjectid="41">
+<map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="200" height="90" tilewidth="16" tileheight="16" infinite="0" nextlayerid="9" nextobjectid="57">
  <tileset firstgid="1" source="minigolf.tsx"/>
  <layer id="1" name="Tile Layer 1" width="200" height="90">
   <data encoding="csv">
@@ -102,13 +102,7 @@
    </properties>
    <point/>
   </object>
-  <object id="27" name="Hole" x="524.004" y="1311.58">
-   <point/>
-  </object>
   <object id="28" name="Hole" x="495.764" y="809.539">
-   <point/>
-  </object>
-  <object id="29" name="Hole" x="715.406" y="1317.85">
    <point/>
   </object>
   <object id="30" name="Hole" x="1139" y="834.641">
@@ -120,12 +114,48 @@
    </properties>
    <point/>
   </object>
+  <object id="41" name="Hole" x="1379.53" y="815.365">
+   <point/>
+  </object>
+  <object id="43" name="Hole" x="1987.65" y="813.272">
+   <point/>
+  </object>
+  <object id="44" name="Hole" x="2615.38" y="580.128">
+   <point/>
+  </object>
+  <object id="46" name="Hole" x="554.487" y="1048.08">
+   <point/>
+  </object>
+  <object id="47" name="Hole" x="721.154" y="1294.87">
+   <point/>
+  </object>
+  <object id="48" name="Hole" x="1365.38" y="1285.26">
+   <point/>
+  </object>
+  <object id="49" name="Hole" x="2003.21" y="1282.05">
+   <point/>
+  </object>
+  <object id="51" name="Hole" x="2657.05" y="1310.9">
+   <point/>
+  </object>
+  <object id="53" name="Hole" x="2685.9" y="96.1538">
+   <point/>
+  </object>
+  <object id="55" name="Hole" x="1864.63" y="90.8025">
+   <properties>
+    <property name="Par" type="int" value="7"/>
+   </properties>
+   <point/>
+  </object>
+  <object id="56" name="Hole" x="1983.26" y="106.047">
+   <properties>
+    <property name="Par" type="int" value="7"/>
+   </properties>
+   <point/>
+  </object>
  </objectgroup>
  <objectgroup id="6" name="BallPos">
   <object id="5" name="Ball" x="40.8263" y="348.509">
-   <point/>
-  </object>
-  <object id="13" name="Ball" x="57.3424" y="1075.57">
    <point/>
   </object>
   <object id="14" name="Ball" x="69.0304" y="724.82">
@@ -146,7 +176,7 @@
   <object id="19" name="Ball" x="1833.31" y="1075.57">
    <point/>
   </object>
-  <object id="20" name="Ball" x="1845" y="724.82">
+  <object id="20" name="Ball" x="1869.07" y="586.658">
    <point/>
   </object>
   <object id="21" name="Ball" x="2473.48" y="274.107">
@@ -164,37 +194,10 @@
   <object id="25" name="Ball" x="3019.38" y="1044.19">
    <point/>
   </object>
-  <object id="26" name="Ball" x="2977.72" y="840.916">
+  <object id="26" name="Ball" x="2978.56" y="812.357">
    <point/>
   </object>
-  <object id="31" name="Hole" x="1862.07" y="92.3147">
-   <properties>
-    <property name="Par" type="int" value="7"/>
-   </properties>
-   <point/>
-  </object>
-  <object id="32" name="Hole" x="1515.53" y="1226.86">
-   <point/>
-  </object>
-  <object id="33" name="Hole" x="1377.47" y="737.371">
-   <point/>
-  </object>
-  <object id="34" name="Hole" x="2086.6" y="856.605">
-   <point/>
-  </object>
-  <object id="35" name="Hole" x="1986.19" y="37.653">
-   <point/>
-  </object>
-  <object id="36" name="Hole" x="2083.46" y="1167.24">
-   <point/>
-  </object>
-  <object id="37" name="Hole" x="2610.61" y="1308.44">
-   <point/>
-  </object>
-  <object id="38" name="Hole" x="2620.02" y="699.718">
-   <point/>
-  </object>
-  <object id="39" name="Hole" x="2613.74" y="75.3059">
+  <object id="45" name="Ball" x="51.2821" y="1282.05">
    <point/>
   </object>
  </objectgroup>
