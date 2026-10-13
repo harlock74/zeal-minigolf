@@ -12,9 +12,9 @@ Enjoy a moonlit animated splash screen, sound effects and a power meter with 32 
 
 | Pond Slalom | First Bend |
 | - | - |
-| ![Pond Slalom gameplay](screenshots/1.png) | ![First Bend gameplay](screenshots/2.png) |
+| ![Pond Slalom gameplay](https://github.com/harlock74/zeal-minigolf/blob/main/screenshots/1.png?raw=true) | ![First Bend gameplay](https://github.com/harlock74/zeal-minigolf/blob/main/screenshots/2.png?raw=true) |
 
-<!-- Screenshot slots: replace screenshots/1.png and screenshots/2.png to update this table. -->
+<!-- Screenshot slots: keep screenshots/1.png and screenshots/2.png in the repository alongside this README. -->
 
 ## Rules
 
@@ -55,4 +55,3 @@ zde cmake
 ```
 
 The playable binary is **`bin/zgolf`**. Load it in Zeal Native Emulator or run it on your Zeal 8-bit Computer.
-
