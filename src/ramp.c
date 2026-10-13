@@ -5,6 +5,10 @@
 #include "config.h"
 #include "ramp.h"
 
+#if RAMP_AIR_FRAMES != 24 || RAMP_ARC_MAX_PIXELS != 12
+#error "Update the ramp arc lookup table when changing duration or height"
+#endif
+
 static uint8_t ramp_air_frames = 0;
 static uint8_t ramp_air_total = 0;
 static uint8_t ramp_cooldown = 0;
@@ -25,12 +29,15 @@ void ramp_reset(void)
     ramp_cooldown = 0;
 }
 
-void ramp_update(void)
+void ramp_tick_cooldown(void)
 {
     if (ramp_cooldown > 0) {
         ramp_cooldown--;
     }
+}
 
+void ramp_update(void)
+{
     if (ramp_air_frames > 0) {
         ramp_air_frames--;
         if (ramp_air_frames == 0) {
@@ -73,38 +80,24 @@ uint8_t ramp_accepts_direction(uint8_t tile, int16_t vx, int16_t vy)
 
 uint8_t ramp_arc_offset(void)
 {
-    uint8_t half;
-    uint8_t progress;
-
-    if (!ramp_is_airborne() || ramp_air_total < 2) {
+    /* A 24-frame parabola: no division or large products during rendering. */
+    static const uint8_t arc[] = { 0, 2, 4, 5, 7, 8, 9, 10, 11, 11, 12, 12,
+        12, 12, 12, 11, 11, 10, 9, 8, 7, 5, 4, 2, 0 };
+    if (!ramp_is_airborne()) {
         return 0;
     }
-
-    half = (uint8_t)(ramp_air_total >> 1);
-    progress = (uint8_t)(ramp_air_total - ramp_air_frames);
-    if (progress > half) {
-        progress = (uint8_t)(ramp_air_total - progress);
-    }
-
-    return (uint8_t)((progress * RAMP_ARC_MAX_PIXELS) / half);
+    return arc[ramp_air_total - ramp_air_frames];
 }
 
 void ramp_start_jump(uint8_t speed, int16_t* vx, int16_t* vy)
 {
-    uint8_t air_frames = (uint8_t)(speed >> RAMP_AIR_SPEED_SHIFT);
-
-    if (air_frames < RAMP_MIN_AIR_FRAMES) {
-        air_frames = RAMP_MIN_AIR_FRAMES;
-    }
-    if (air_frames > RAMP_MAX_AIR_FRAMES) {
-        air_frames = RAMP_MAX_AIR_FRAMES;
-    }
-
-    ramp_air_frames = air_frames;
-    ramp_air_total = air_frames;
+    /* Entry speed controls distance; duration is consistent for every ramp. */
+    (void)speed;
+    ramp_air_frames = RAMP_AIR_FRAMES;
+    ramp_air_total = RAMP_AIR_FRAMES;
     ramp_cooldown = RAMP_COOLDOWN_FRAMES;
-    *vx = (int16_t)((*vx * RAMP_LAUNCH_SPEED_NUMERATOR) >> RAMP_LAUNCH_SPEED_SHIFT);
-    *vy = (int16_t)((*vy * RAMP_LAUNCH_SPEED_NUMERATOR) >> RAMP_LAUNCH_SPEED_SHIFT);
+    *vx = (int16_t)(*vx - *vx / (1 << RAMP_LAUNCH_LOSS_SHIFT));
+    *vy = (int16_t)(*vy - *vy / (1 << RAMP_LAUNCH_LOSS_SHIFT));
 }
 
 void ramp_start_failed_rebound(void)
@@ -121,8 +114,8 @@ int16_t ramp_failed_rebound_velocity(int16_t velocity)
     }
 
     speed = (uint16_t)((speed * RAMP_FAILED_REBOUND_NUMERATOR) >> RAMP_FAILED_REBOUND_SHIFT);
-    if (speed < RAMP_FAILED_MIN_REBOUND_SPEED) {
-        speed = RAMP_FAILED_MIN_REBOUND_SPEED;
+    if (speed <= BALL_STOP_SPEED) {
+        return 0;
     }
 
     if (velocity < 0) {

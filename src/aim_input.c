@@ -5,27 +5,9 @@
 #include "config.h"
 #include "aim_input.h"
 
-static uint16_t aim_direction_mask(uint16_t input)
-{
-    const uint16_t aim_mask = BUTTON_LEFT | BUTTON_RIGHT;
-
-    if ((input & aim_mask) == BUTTON_LEFT) {
-        return BUTTON_LEFT;
-    }
-
-    if ((input & aim_mask) == BUTTON_RIGHT) {
-        return BUTTON_RIGHT;
-    }
-
-    return 0;
-}
-
 void aim_input_reset(aim_input_state_t* state)
 {
     state->repeat_wait = 0;
-    state->held_steps = 0;
-    state->held_mask = 0;
-    state->blocked_mask = 0;
 }
 
 uint16_t aim_input_clear(aim_input_state_t* state, uint16_t input, uint16_t* previous)
@@ -41,29 +23,12 @@ uint16_t aim_input_clear(aim_input_state_t* state, uint16_t input, uint16_t* pre
 uint16_t aim_input_filter(aim_input_state_t* state, uint16_t input, uint8_t ball_rolling)
 {
     const uint16_t aim_mask = BUTTON_LEFT | BUTTON_RIGHT;
-    uint16_t direction = aim_direction_mask(input);
-
-    if (direction == 0 || ball_rolling) {
-        state->held_steps = 0;
-        state->held_mask = 0;
-        state->blocked_mask = 0;
-        return input;
-    }
-
+    (void)state;
+    (void)ball_rolling;
     if (input & SHOOT_BUTTON_MASK) {
-        state->held_steps = 0;
-        state->held_mask = 0;
-        state->blocked_mask = 0;
         return (uint16_t)(input & (uint16_t)~aim_mask);
     }
-
-    if (direction != state->held_mask) {
-        state->held_steps = 0;
-        state->held_mask = direction;
-        state->blocked_mask = 0;
-    }
-
-    return (uint16_t)(input & (uint16_t)~state->blocked_mask);
+    return input;
 }
 
 void aim_input_tick(aim_input_state_t* state, uint16_t input)
@@ -122,20 +87,7 @@ void aim_input_note_rotation(aim_input_state_t* state, uint16_t direction)
         return;
     }
 
-    if (direction != state->held_mask) {
-        state->held_steps = 0;
-        state->held_mask = direction;
-        state->blocked_mask = 0;
-    }
-
-    if (state->held_steps < AIM_INPUT_MAX_HELD_STEPS) {
-        state->held_steps++;
-    }
-
-    if (state->held_steps >= AIM_INPUT_MAX_HELD_STEPS) {
-        state->blocked_mask = direction;
-        state->repeat_wait = 0;
-    }
-
+    /* Lost keyboard releases are handled by the event lease in input.c.
+     * A real controller may legitimately stay held for any duration. */
     state->repeat_wait = AIM_INPUT_REPEAT_FRAMES;
 }

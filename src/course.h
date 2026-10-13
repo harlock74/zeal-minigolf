@@ -1,7 +1,9 @@
 #ifndef ZGOLF_COURSE_H
 #define ZGOLF_COURSE_H
 
+#include <stdint.h>
 #include <zvb_gfx.h>
+#include "config.h"
 
 typedef struct {
     uint8_t ball_x;
@@ -9,6 +11,7 @@ typedef struct {
     uint8_t hole_x;
     uint8_t hole_y;
     uint8_t par;
+    const char* name;
 } course_info_t;
 
 extern const course_info_t course_infos[GAME_COURSE_COUNT];

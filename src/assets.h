@@ -13,6 +13,7 @@ extern uint8_t _tileset_end;
 
 gfx_error assets_load_palette(gfx_context* ctx);
 gfx_error assets_load_tileset(gfx_context* ctx, gfx_tileset_options* options);
+const uint8_t* assets_get_packed_tile(uint8_t tile);
 
 uint8_t assets_get_course_count(void);
 uint8_t assets_get_course_index(void);

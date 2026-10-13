@@ -5,6 +5,7 @@
 
 void ramp_reset(void);
 void ramp_update(void);
+void ramp_tick_cooldown(void);
 uint8_t ramp_is_airborne(void);
 uint8_t ramp_can_start(void);
 uint8_t ramp_tile_is(uint8_t tile);

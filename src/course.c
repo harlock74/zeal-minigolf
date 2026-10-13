@@ -39,11 +39,11 @@ uint8_t course_get_tile(uint8_t x, uint8_t y)
 
 void course_render(gfx_context* ctx)
 {
+    uint8_t row[SCREEN_TILES_W];
     for (uint8_t y = 0; y < SCREEN_TILES_H; y++) {
         for (uint8_t x = 0; x < SCREEN_TILES_W; x++) {
-            uint8_t tile = course_get_tile(x, y);
-
-            gfx_tilemap_place(ctx, tile, COURSE_LAYER, x, y);
+            row[x] = course_get_tile(x, y);
         }
+        gfx_tilemap_load(ctx,row,SCREEN_TILES_W,COURSE_LAYER,0,y);
     }
 }

@@ -7,6 +7,8 @@
 
 zos_err_t zgolf_input_init(void);
 uint16_t zgolf_input_read_current(void);
+uint16_t zgolf_input_pressed(void);
+uint16_t zgolf_input_released(void);
 void zgolf_input_flush(void);
 
 #endif

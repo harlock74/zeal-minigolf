@@ -3,9 +3,16 @@
 
 #include "assets.h"
 #include "config.h"
+#include "course_map.h"
 #include "course_assets.generated.inc"
 
 static uint8_t active_course_index = 0;
+static uint8_t active_map[COURSE_TILES_W * PLAYFIELD_TILES_H];
+
+const uint8_t* assets_get_packed_tile(uint8_t tile)
+{
+    return &_tileset_start + (uint16_t)tile * 128;
+}
 
 gfx_error assets_load_palette(gfx_context* ctx)
 {
@@ -49,13 +56,11 @@ gfx_error assets_load_tileset(gfx_context* ctx, gfx_tileset_options* options)
 
 uint8_t assets_get_course_tile(uint8_t x, uint8_t y)
 {
-    const uint8_t* map = (const uint8_t*)course_maps[active_course_index];
-
-    if (x >= COURSE_TILES_W || y >= COURSE_TILES_H) {
+    if (x >= COURSE_TILES_W || y >= PLAYFIELD_TILES_H) {
         return EMPTY_TILE;
     }
 
-    return (uint8_t)(map[((uint16_t)y * COURSE_TILES_W) + x] + TILEMAP_GID_OFFSET);
+    return (uint8_t)(active_map[((uint16_t)y * COURSE_TILES_W) + x] + TILEMAP_GID_OFFSET);
 }
 
 uint8_t assets_get_course_count(void)
@@ -79,6 +84,11 @@ void assets_set_course_index(uint8_t index)
     }
 
     active_course_index = index;
+    {
+        const uint8_t* source = (const uint8_t*)course_maps[index];
+        if (!course_map_decode(source, course_map_sizes[index], active_map))
+            for (uint16_t i = 0; i < sizeof(active_map); i++) active_map[i] = EMPTY_TILE;
+    }
 }
 
 void __assets__(void) __naked

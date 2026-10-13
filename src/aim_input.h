@@ -5,9 +5,6 @@
 
 typedef struct {
     uint8_t repeat_wait;
-    uint8_t held_steps;
-    uint16_t held_mask;
-    uint16_t blocked_mask;
 } aim_input_state_t;
 
 void aim_input_reset(aim_input_state_t* state);

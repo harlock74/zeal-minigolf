@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+void aim_reset_towards(int16_t dx, int16_t dy);
 void aim_rotate_left(void);
 void aim_rotate_right(void);
 int16_t aim_vector_x(void);

@@ -34,12 +34,14 @@ add_executable(${target_name}
     src/assets.c
     src/coords.c
     src/course.c
+    src/feedback.c
     src/hud.c
     src/input.c
     src/objects.c
     src/physics.c
     src/ramp.c
     src/shot.c
+    src/splash.c
     src/terrain.c
 )
 
@@ -69,15 +71,25 @@ set(COURSE_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated")
 set(COURSE_GENERATED_HEADER "${COURSE_GENERATED_DIR}/course_assets.generated.h")
 set(COURSE_GENERATED_SOURCE "${COURSE_GENERATED_DIR}/course_assets.generated.inc")
 set(COURSE_INFO_GENERATED_SOURCE "${COURSE_GENERATED_DIR}/course_infos.generated.c")
+set(COURSE_GENERATED_MAPS)
+foreach(course_index RANGE 0 14)
+    if(course_index LESS 10)
+        set(course_suffix "000${course_index}")
+    else()
+        set(course_suffix "00${course_index}")
+    endif()
+    list(APPEND COURSE_GENERATED_MAPS "${COURSE_GENERATED_DIR}/minigolf${course_suffix}.rle")
+endforeach()
 
 add_custom_command(
-    OUTPUT "${COURSE_GENERATED_HEADER}" "${COURSE_GENERATED_SOURCE}"
+    OUTPUT "${COURSE_GENERATED_HEADER}" "${COURSE_GENERATED_SOURCE}" ${COURSE_GENERATED_MAPS}
     COMMAND ${CMAKE_COMMAND} -E make_directory "${COURSE_GENERATED_DIR}"
     COMMAND ${Python3_EXECUTABLE}
             "${CMAKE_SOURCE_DIR}/tools/gen_course_assets.py"
             --tmx "${CMAKE_SOURCE_DIR}/assets/minigolf.tmx"
             --course-width-tiles ${COURSE_WIDTH_TILES}
             --course-height-tiles ${COURSE_HEIGHT_TILES}
+            --playfield-height 24
             --header "${COURSE_GENERATED_HEADER}"
             --source "${COURSE_GENERATED_SOURCE}"
     DEPENDS
@@ -88,7 +100,7 @@ add_custom_command(
 )
 
 add_custom_target(${target_name}_course_asset_codegen
-    DEPENDS "${COURSE_GENERATED_HEADER}" "${COURSE_GENERATED_SOURCE}"
+    DEPENDS "${COURSE_GENERATED_HEADER}" "${COURSE_GENERATED_SOURCE}" ${COURSE_GENERATED_MAPS}
 )
 add_dependencies(${target_name} ${target_name}_course_asset_codegen)
 
@@ -129,14 +141,15 @@ gif2zeal(${target_name} FILES
     COLORS 16
 )
 
-tiled2zeal(${target_name} FILES
-    "assets/minigolf.tmx"
-    VERBOSE
-    LAYER 0
-    SIZE ${COURSE_WIDTH_TILES}x${COURSE_HEIGHT_TILES}
-)
+# gen_course_assets.py emits run-length-encoded 40x24 maps directly.
 
 # -------------------------------
 # Convert to binary
 # -------------------------------
 zgdk_add_outputs(${target_name})
+add_custom_target(${target_name}_memory_check ALL
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tools/check_link_map.py"
+        "${CMAKE_SOURCE_DIR}/debug/${target_name}.map"
+    DEPENDS ${target_name}_bin
+    VERBATIM
+)
