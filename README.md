@@ -10,11 +10,11 @@ Enjoy a moonlit animated splash screen, sound effects and a power meter with 32 
 
 ## Screenshots
 
-| Pond Slalom | First Bend |
-| - | - |
-| ![Pond Slalom gameplay](https://github.com/harlock74/zeal-minigolf/blob/main/screenshots/1.png?raw=true) | ![First Bend gameplay](https://github.com/harlock74/zeal-minigolf/blob/main/screenshots/2.png?raw=true) |
+| Splash Screen | First Bend | Pond Slalom |
+| - | - | - |
+| ![ZEAL MINIGOLF splash screen](./screenshots/1.png) | ![First Bend gameplay](./screenshots/2.png) | ![Pond Slalom gameplay](./screenshots/3.png) |
 
-<!-- Screenshot slots: keep screenshots/1.png and screenshots/2.png in the repository alongside this README. -->
+<!-- Keep the screenshots folder in the repository alongside this README. -->
 
 ## Rules
 
