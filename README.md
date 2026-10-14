@@ -6,8 +6,6 @@ zeal-minigolf is a miniature golf game for the Zeal 8-bit Computer, featuring **
 
 It runs at **640×480 @8bpp**.
 
-Enjoy a moonlit animated splash screen, sound effects and a power meter with 32 settings, from gentle putts to full-power shots. Find your way through each course and finish the round with as few strokes as possible.
-
 ## Screenshots
 
 | Splash Screen | First Bend | Pond Slalom |
