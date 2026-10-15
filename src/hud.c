@@ -80,38 +80,6 @@ void hud_init(void)
     ascii_map('/', 1, TILE_ID_FONT_SLASH);
 }
 
-static uint8_t power_pixel(uint8_t variant, uint8_t x, uint8_t y)
-{
-    if(variant<5) {
-        if((y==3 || y==12) || ((x==0 || x==15) && y>3 && y<12)) return 9;
-        if(y>=5 && y<=10 && x>=2 && x<14) return x<2+variant*3 ? 11 : 2;
-    } else if(variant<9) {
-        uint8_t center=(uint8_t)(3+(variant-5)*3);
-        if(y<4 && x>=center-y && x<=center+y) return 11;
-    } else if(y>=3 && y<=12 && x>=13-y && x<=14-y) {
-        return 11;
-    }
-    return 0;
-}
-
-gfx_error hud_load_power_tiles(gfx_context* ctx)
-{
-    uint8_t pixels[128];
-    uint8_t variant,x,y;
-    for(variant=0;variant<10;variant++) {
-        gfx_tileset_options options={.compression=TILESET_COMP_4BIT,
-            .from_byte=(uint16_t)((TILE_ID_POWER_TRACK+variant)*256)};
-        for(y=0;y<16;y++) for(x=0;x<16;x+=2) {
-            pixels[y*8+x/2]=(uint8_t)((power_pixel(variant,x,y)<<4)|power_pixel(variant,x+1,y));
-        }
-        {
-            gfx_error err=gfx_tileset_load(ctx,pixels,sizeof(pixels),&options);
-            if(err!=GFX_SUCCESS) return err;
-        }
-    }
-    return GFX_SUCCESS;
-}
-
 void hud_render_static(gfx_context* ctx)
 {
     uint8_t i;

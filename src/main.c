@@ -206,14 +206,10 @@ void init(void)
 
     feedback_init();
     hud_init();
-    err = hud_load_power_tiles(&vctx);
-    handle_error(err,"failed to load power display",1);
 
     tilemap_fill(&vctx, COURSE_LAYER, EMPTY_TILE, 0, 0, SCREEN_TILES_W, SCREEN_TILES_H);
     tilemap_fill(&vctx, UI_LAYER, EMPTY_TILE, 0, 0, SCREEN_TILES_W, SCREEN_TILES_H);
 
-    err = splash_load_tiles(&vctx);
-    handle_error(err, "failed to load intro", 1);
     splash_render(&vctx);
     gfx_enable_screen(1);
     zgolf_input_flush();

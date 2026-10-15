@@ -9,11 +9,6 @@
 static uint8_t active_course_index = 0;
 static uint8_t active_map[COURSE_TILES_W * PLAYFIELD_TILES_H];
 
-const uint8_t* assets_get_packed_tile(uint8_t tile)
-{
-    return &_tileset_start + (uint16_t)tile * 128;
-}
-
 gfx_error assets_load_palette(gfx_context* ctx)
 {
     const uint16_t palette_size = (uint16_t)(&_palette_end - &_palette_start);
