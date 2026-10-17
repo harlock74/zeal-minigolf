@@ -5,7 +5,7 @@
 #include "config.h"
 #include "feedback.h"
 #include "splash.h"
-#include "splash.generated.h"
+#include "splash_settings.h"
 
 static uint8_t blink, visible, ready, starting, pause_ticks, segment;
 static uint16_t segment_ticks;
@@ -15,11 +15,11 @@ static gfx_sprite logo_ball;
 /* Small row buffer; the editable screen stays compressed in program storage. */
 static void load_layer(gfx_context* ctx, const uint8_t* source, uint8_t layer)
 {
-    uint8_t row[SCREEN_TILES_W], x, y, count = 0, tile = EMPTY_TILE;
+    uint8_t row[SCREEN_TILES_W], x, y, count = 0, tile = EMPTY_TILE, repeat = 0;
     for (y = 0; y < SCREEN_TILES_H; y++) {
         for (x = 0; x < SCREEN_TILES_W; x++) {
-            if (!count) {count = *source++; tile = *source++;}
-            row[x] = tile;
+            if (!count) {uint8_t control=*source++;count=(control&127)+1;repeat=control&128;if(repeat)tile=*source++;}
+            row[x] = repeat ? tile : *source++;
             count--;
         }
         gfx_tilemap_load(ctx, row, SCREEN_TILES_W, layer, 0, y);

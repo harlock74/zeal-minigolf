@@ -34,6 +34,7 @@ add_executable(${target_name}
     src/assets.c
     src/coords.c
     src/course.c
+    src/course_settings.c
     src/feedback.c
     src/hud.c
     src/input.c
@@ -67,81 +68,53 @@ target_link_libraries(${target_name} PUBLIC zgdk)
 set(COURSE_WIDTH_TILES 40)
 set(COURSE_HEIGHT_TILES 30)
 set(GAME_COURSE_COUNT 15)
-set(COURSE_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated")
-set(COURSE_GENERATED_HEADER "${COURSE_GENERATED_DIR}/course_assets.generated.h")
-set(COURSE_GENERATED_SOURCE "${COURSE_GENERATED_DIR}/course_assets.generated.inc")
-set(COURSE_INFO_GENERATED_SOURCE "${COURSE_GENERATED_DIR}/course_infos.generated.c")
 set(COURSE_GENERATED_MAPS)
+set(SDK_TILED_CONVERTER "$ENV{ZVB_SDK_PATH}/tools/tiled2zeal/tiled2zeal.py")
 foreach(course_index RANGE 0 14)
     if(course_index LESS 10)
         set(course_suffix "000${course_index}")
     else()
         set(course_suffix "00${course_index}")
     endif()
-    list(APPEND COURSE_GENERATED_MAPS "${COURSE_GENERATED_DIR}/minigolf${course_suffix}.rle")
+    list(APPEND COURSE_GENERATED_MAPS "${CMAKE_BINARY_DIR}/assets/minigolf${course_suffix}.ztm")
 endforeach()
 
-add_custom_command(
-    OUTPUT "${COURSE_GENERATED_HEADER}" "${COURSE_GENERATED_SOURCE}" ${COURSE_GENERATED_MAPS}
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${COURSE_GENERATED_DIR}"
-    COMMAND ${Python3_EXECUTABLE}
-            "${CMAKE_SOURCE_DIR}/tools/gen_course_assets.py"
-            --tmx "${CMAKE_SOURCE_DIR}/assets/minigolf.tmx"
-            --course-width-tiles ${COURSE_WIDTH_TILES}
-            --course-height-tiles ${COURSE_HEIGHT_TILES}
-            --playfield-height 24
-            --header "${COURSE_GENERATED_HEADER}"
-            --source "${COURSE_GENERATED_SOURCE}"
-    DEPENDS
-            "${CMAKE_SOURCE_DIR}/tools/gen_course_assets.py"
-            "${CMAKE_SOURCE_DIR}/assets/minigolf.tmx"
-    COMMENT "Generating course tilemap asset symbols"
-    VERBATIM
-)
+# The SDK handles the multi-screen conversion and compression. List all outputs
+# explicitly because this atlas produces fifteen .ztm files.
+add_custom_command(OUTPUT ${COURSE_GENERATED_MAPS}
+    COMMAND ${Python3_EXECUTABLE} "${SDK_TILED_CONVERTER}"
+        -i "${CMAKE_SOURCE_DIR}/assets/minigolf.tmx" -o "${CMAKE_BINARY_DIR}/assets"
+        -s 40x30 -z
+    DEPENDS "${CMAKE_SOURCE_DIR}/assets/minigolf.tmx" "${SDK_TILED_CONVERTER}" VERBATIM)
+set(SDK_SPLASH_MAPS "${CMAKE_BINARY_DIR}/assets/splash0000.ztm" "${CMAKE_BINARY_DIR}/assets/splash0001.ztm")
+add_custom_command(OUTPUT ${SDK_SPLASH_MAPS}
+    COMMAND ${Python3_EXECUTABLE} "${SDK_TILED_CONVERTER}"
+        -i "${CMAKE_SOURCE_DIR}/assets/splash.tmx" -o "${CMAKE_BINARY_DIR}/assets" -z
+    DEPENDS "${CMAKE_SOURCE_DIR}/assets/splash.tmx" "${SDK_TILED_CONVERTER}" VERBATIM)
+add_custom_target(${target_name}_sdk_splash_maps DEPENDS ${SDK_SPLASH_MAPS})
+add_dependencies(${target_name} ${target_name}_sdk_splash_maps)
 
-add_custom_target(${target_name}_course_asset_codegen
-    DEPENDS "${COURSE_GENERATED_HEADER}" "${COURSE_GENERATED_SOURCE}" ${COURSE_GENERATED_MAPS}
-)
-add_dependencies(${target_name} ${target_name}_course_asset_codegen)
-
-add_custom_command(
-    OUTPUT "${COURSE_INFO_GENERATED_SOURCE}"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${COURSE_GENERATED_DIR}"
-    COMMAND ${Python3_EXECUTABLE}
-            "${CMAKE_SOURCE_DIR}/tools/gen_course_markers.py"
-            --tmx "${CMAKE_SOURCE_DIR}/assets/minigolf.tmx"
-            --course-width-tiles ${COURSE_WIDTH_TILES}
-            --course-height-tiles ${COURSE_HEIGHT_TILES}
-            --tile-size 16
-            --course-count ${GAME_COURSE_COUNT}
-            --config "${CMAKE_SOURCE_DIR}/src/config.h"
-            --output "${COURSE_INFO_GENERATED_SOURCE}"
-    DEPENDS
-            "${CMAKE_SOURCE_DIR}/tools/gen_course_markers.py"
-            "${CMAKE_SOURCE_DIR}/assets/minigolf.tmx"
-            "${CMAKE_SOURCE_DIR}/src/config.h"
-    COMMENT "Generating course marker metadata"
-    VERBATIM
-)
-
-add_custom_target(${target_name}_course_marker_codegen
-    DEPENDS "${COURSE_INFO_GENERATED_SOURCE}"
-)
-add_dependencies(${target_name} ${target_name}_course_marker_codegen)
-target_sources(${target_name} PRIVATE "${COURSE_INFO_GENERATED_SOURCE}")
-target_include_directories(${target_name} PRIVATE "${COURSE_GENERATED_DIR}" "${CMAKE_SOURCE_DIR}/src")
+# SDK outputs stay generated; gameplay settings are ordinary maintained C tables.
+add_custom_target(${target_name}_course_maps DEPENDS ${COURSE_GENERATED_MAPS})
+add_dependencies(${target_name} ${target_name}_course_maps)
+target_include_directories(${target_name} PRIVATE "${CMAKE_SOURCE_DIR}/src")
 
 # -------------------------------
 # Assets
 # -------------------------------
 gif2zeal(${target_name} FILES
     "assets/minigolf.gif"
-    STRIP 192
+    STRIP 182
     BIT 4
     COLORS 16
 )
 
-# gen_course_assets.py emits run-length-encoded 40x24 maps directly.
+
+# Assembly incbin input changes must also invalidate assets.c.
+set_property(SOURCE src/assets.c APPEND PROPERTY OBJECT_DEPENDS
+    "${CMAKE_BINARY_DIR}/assets/minigolf.zts;${CMAKE_BINARY_DIR}/assets/minigolf.ztp;${COURSE_GENERATED_MAPS};${SDK_SPLASH_MAPS}")
+
+# Map bytes come from SDK tiled2zeal. Gameplay settings live in src/course_settings.c and src/splash_settings.h.
 
 # -------------------------------
 # Convert to binary

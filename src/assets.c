@@ -4,7 +4,7 @@
 #include "assets.h"
 #include "config.h"
 #include "course_map.h"
-#include "course_assets.generated.inc"
+#include "course_assets.inc"
 
 static uint8_t active_course_index = 0;
 static uint8_t active_map[COURSE_TILES_W * PLAYFIELD_TILES_H];
@@ -97,5 +97,8 @@ void __assets__(void) __naked
         "    .incbin \"assets/minigolf.zts\"\n"
         "__tileset_end:\n"
         COURSE_MAPS_ASM
+        ".globl _splash_course\n.globl _splash_lettering\n"
+        "_splash_course:\n.incbin \"assets/splash0000.ztm\"\n"
+        "_splash_lettering:\n.incbin \"assets/splash0001.ztm\"\n"
     );
 }

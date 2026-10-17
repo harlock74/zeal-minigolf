@@ -30,10 +30,8 @@ compile_commands.json
 *.zts
 *.ztp
 
-# Python
-__pycache__/
-*.pyc
-
-# Tiled
-*.tiled-project
+# Tiled editor state
 *.tiled-session
+
+# Python check and authoring tools
+__pycache__/
