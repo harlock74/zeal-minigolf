@@ -34,7 +34,13 @@ uint16_t coords_fixed_to_center_pixel(uint16_t value)
 
 uint8_t coords_fixed_to_center_tile(uint16_t value)
 {
-    return (uint8_t)(coords_fixed_to_center_pixel(value) >> TILE_PIXEL_SHIFT);
+    /* floor(max(floor(value/16)-8,0)/16), with no nested conversions.
+     * With Q4 positions and 16px tiles the final shift selects one byte. */
+    if (value < (TILE_PIXEL_SIZE / 2) * FIXED_ONE) {
+        return 0;
+    }
+    return (uint8_t)((value - (TILE_PIXEL_SIZE / 2) * FIXED_ONE) >>
+        (FIXED_SHIFT + TILE_PIXEL_SHIFT));
 }
 
 uint16_t coords_center_pixel_to_fixed(int16_t value)

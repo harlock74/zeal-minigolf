@@ -9,9 +9,10 @@ static uint8_t shot_power_step = 0;
 static uint8_t shot_charge_wait = 0;
 static uint16_t strokes = 0;
 static uint8_t last_power = 0;
-/* Q2 gains. Every fourth level is an original, tested shot anchor. */
+/* Q2 gains. Levels 1-5 preserve fine positioning with constant rolling
+ * resistance; levels 6-32 retain their original launch speeds. */
 static const uint8_t shot_power_steps[SHOT_POWER_LEVELS] = {
-    4,5,6,8, 11,14,17,20, 25,30,35,40, 46,52,58,64,
+    8,9,10,11, 12,14,17,20, 25,30,35,40, 46,52,58,64,
     71,78,85,92, 98,104,110,116, 122,128,134,140, 148,156,164,172
 };
 

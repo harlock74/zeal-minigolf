@@ -120,7 +120,9 @@
 #define HUD_WATER_LINE_2_Y 28
 #define HUD_WATER_LINE_2_WIDTH 9
 
-#define BALL_FRICTION_SHIFT 5 /* lose 1/32 of velocity per frame */
+/* Ground drag removes 1/(2^shift) of velocity per update; larger rolls farther. */
+#define BALL_GROUND_DRAG_SHIFT 6 /* 6 = 1/64; previous setting: 5 = 1/32 */
+#define BALL_GROUND_DECEL_Q8 2 /* constant rolling deceleration: 2/256 px/update^2 */
 #define BALL_STOP_SPEED 16
 #define WALL_BOUNCE_FACTOR 12      /* 12/16 = 75% speed retained */
 #define DEFLECTOR_BOUNCE_FACTOR 12 /* 12/16 = 75% speed retained */

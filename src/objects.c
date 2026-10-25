@@ -38,18 +38,53 @@ typedef struct {
 } ball_state_t;
 
 static ball_state_t ball;
+static uint8_t sample_cache_valid = 0;
+static uint8_t sample_cache_x;
+static uint8_t sample_cache_y;
+static uint8_t sample_cache_tile;
+static uint8_t sample_tiles_x[4];
+static uint8_t sample_tiles_y[4];
+static uint8_t sample_tiles[4];
+
+static void reset_sample_cache(void)
+{
+    sample_cache_valid = 0;
+    sample_tiles_x[0] = sample_tiles_x[1] = sample_tiles_x[2] = sample_tiles_x[3] = 255;
+}
+
+/* The course is immutable during an update. Reuse only the raw tile ID;
+ * diagonal-bank geometry is still tested separately at every edge sample. */
+static uint8_t sample_tile_miss(uint8_t x, uint8_t y)
+{
+    /* Adjacent edge samples can alternate between floor and wall tiles.
+     * Keep their raw IDs instead of repeatedly evicting one another.
+     * Exact bank geometry is still evaluated at every sample below. */
+    uint8_t slot = (uint8_t)((x & 1) | ((y & 1) << 1));
+    if (sample_tiles_x[slot] != x || sample_tiles_y[slot] != y) {
+        sample_tiles[slot] = course_get_tile(x, y);
+        sample_tiles_x[slot] = x;
+        sample_tiles_y[slot] = y;
+    }
+    sample_cache_tile = sample_tiles[slot];
+    sample_cache_x = x;
+    sample_cache_y = y;
+    sample_cache_valid = 1;
+    return sample_cache_tile;
+}
+
+static uint8_t sampled_course_tile(uint8_t x, uint8_t y)
+{
+    /* Keep the common repeated-sample hit free of the indexed cache's stack
+     * frame. Only changes of tile need the four-entry lookup. */
+    if (sample_cache_valid && x == sample_cache_x && y == sample_cache_y) {
+        return sample_cache_tile;
+    }
+    return sample_tile_miss(x, y);
+}
 
 static uint8_t ball_tile_at(uint16_t x, uint16_t y)
 {
-    return course_get_tile(coords_fixed_to_center_tile(x), coords_fixed_to_center_tile(y));
-}
-
-static uint8_t ball_sample_outside_playfield(uint16_t x, uint16_t y)
-{
-    uint8_t tile_x = coords_fixed_to_center_tile(x);
-    uint8_t tile_y = coords_fixed_to_center_tile(y);
-
-    return (uint8_t)(tile_x >= COURSE_TILES_W || tile_y >= PLAYFIELD_TILES_H);
+    return sampled_course_tile(coords_fixed_to_center_tile(x), coords_fixed_to_center_tile(y));
 }
 
 static uint8_t ball_is_airborne(void)
@@ -59,38 +94,48 @@ static uint8_t ball_is_airborne(void)
 
 static uint8_t deflector_solid_at(uint8_t tile, uint16_t x, uint16_t y)
 {
-    uint8_t local_x = (uint8_t)(coords_fixed_to_center_pixel(x) & TILE_PIXEL_MASK);
-    uint8_t local_y = (uint8_t)(coords_fixed_to_center_pixel(y) & TILE_PIXEL_MASK);
-    int16_t diagonal_y = local_x;
-    int16_t distance;
+    /* The same saturated centre-pixel coordinates, using only the low pixel
+     * nibble for bank geometry. No nested conversions or signed word maths
+     * on the high-speed bank path; the solid band is exactly unchanged. */
+    uint8_t local_x = x < (TILE_PIXEL_SIZE / 2) * FIXED_ONE ? 0 :
+        (uint8_t)(((x >> FIXED_SHIFT) - TILE_PIXEL_SIZE / 2) & TILE_PIXEL_MASK);
+    uint8_t local_y = y < (TILE_PIXEL_SIZE / 2) * FIXED_ONE ? 0 :
+        (uint8_t)(((y >> FIXED_SHIFT) - TILE_PIXEL_SIZE / 2) & TILE_PIXEL_MASK);
+    uint8_t diagonal_y = local_x;
+    uint8_t distance;
 
-    if (terrain_tile_is_slash_deflector(tile)) {
-        diagonal_y = (int16_t)(TILE_PIXEL_MASK - local_x);
+    if (tile == TILE_ID_DEFLECT_SLASH_1 || tile == TILE_ID_DEFLECT_SLASH_2) {
+        diagonal_y = (uint8_t)(TILE_PIXEL_MASK - local_x);
     }
 
-    distance = (int16_t)local_y - diagonal_y;
-    if (distance < 0) {
-        distance = (int16_t)(0 - distance);
-    }
+    distance = local_y > diagonal_y ? local_y - diagonal_y : diagonal_y - local_y;
 
     return (uint8_t)(distance <= DEFLECTOR_SOLID_HALF_WIDTH_PIXELS);
 }
 
-static uint8_t ball_collision_tile_at_offset(uint16_t x, uint16_t y, int8_t offset_x, int8_t offset_y)
+static uint8_t ball_collision_tile_at_sample(int16_t sample_x, int16_t sample_y)
 {
-    int16_t sample_x = (int16_t)x + ((int16_t)offset_x * FIXED_ONE);
-    int16_t sample_y = (int16_t)y + ((int16_t)offset_y * FIXED_ONE);
+    uint8_t tile_x;
+    uint8_t tile_y;
     uint8_t tile;
 
     if (sample_x < BALL_MIN_FIXED || sample_y < BALL_MIN_FIXED) {
         return TILE_ID_WALL;
     }
 
-    if (ball_sample_outside_playfield((uint16_t)sample_x, (uint16_t)sample_y)) {
+    /* Equivalent to fixed -> sprite -> centre pixel -> tile, including the
+     * centre-coordinate saturation at zero. Subtract the 8px sprite bias in
+     * Q4, then shift by eight: SDCC can select the high byte directly.
+     * Keep every edge sample and the <=2px subdivision unchanged. */
+    tile_x = sample_x < (TILE_PIXEL_SIZE / 2) * FIXED_ONE ? 0 :
+        (uint8_t)((sample_x - (TILE_PIXEL_SIZE / 2) * FIXED_ONE) >> (FIXED_SHIFT + TILE_PIXEL_SHIFT));
+    tile_y = sample_y < (TILE_PIXEL_SIZE / 2) * FIXED_ONE ? 0 :
+        (uint8_t)((sample_y - (TILE_PIXEL_SIZE / 2) * FIXED_ONE) >> (FIXED_SHIFT + TILE_PIXEL_SHIFT));
+    if (tile_x >= COURSE_TILES_W || tile_y >= PLAYFIELD_TILES_H) {
         return TILE_ID_WALL;
     }
 
-    tile = ball_tile_at((uint16_t)sample_x, (uint16_t)sample_y);
+    tile = sampled_course_tile(tile_x, tile_y);
     if (terrain_tile_is_deflector(tile) &&
         !deflector_solid_at(tile, (uint16_t)sample_x, (uint16_t)sample_y)) {
         return EMPTY_TILE;
@@ -99,26 +144,33 @@ static uint8_t ball_collision_tile_at_offset(uint16_t x, uint16_t y, int8_t offs
     return tile;
 }
 
+static uint8_t ball_collision_tile_at_offset(uint16_t x, uint16_t y, int8_t offset_x, int8_t offset_y)
+{
+    return ball_collision_tile_at_sample((int16_t)x + (int16_t)offset_x * FIXED_ONE,
+        (int16_t)y + (int16_t)offset_y * FIXED_ONE);
+}
+
 static uint8_t ball_collision_tile_x(uint16_t x, uint16_t y, int16_t velocity)
 {
-    int8_t edge = BALL_COLLISION_RADIUS_PIXELS;
+    int16_t edge = BALL_COLLISION_RADIUS_PIXELS * FIXED_ONE;
     uint8_t tile;
 
     if (velocity < 0) {
-        edge = -BALL_COLLISION_RADIUS_PIXELS;
+        edge = -BALL_COLLISION_RADIUS_PIXELS * FIXED_ONE;
     }
 
-    tile = ball_collision_tile_at_offset(x, y, edge, -BALL_COLLISION_RADIUS_PIXELS);
+    int16_t sample_x = (int16_t)x + edge;
+    tile = ball_collision_tile_at_sample(sample_x, (int16_t)y - BALL_COLLISION_RADIUS_PIXELS * FIXED_ONE);
     if (tile == TILE_ID_WALL || terrain_tile_is_deflector(tile)) {
         return tile;
     }
 
-    tile = ball_collision_tile_at_offset(x, y, edge, 0);
+    tile = ball_collision_tile_at_sample(sample_x, (int16_t)y);
     if (tile == TILE_ID_WALL || terrain_tile_is_deflector(tile)) {
         return tile;
     }
 
-    tile = ball_collision_tile_at_offset(x, y, edge, BALL_COLLISION_RADIUS_PIXELS);
+    tile = ball_collision_tile_at_sample(sample_x, (int16_t)y + BALL_COLLISION_RADIUS_PIXELS * FIXED_ONE);
     if (tile == TILE_ID_WALL || terrain_tile_is_deflector(tile)) {
         return tile;
     }
@@ -128,24 +180,25 @@ static uint8_t ball_collision_tile_x(uint16_t x, uint16_t y, int16_t velocity)
 
 static uint8_t ball_collision_tile_y(uint16_t x, uint16_t y, int16_t velocity)
 {
-    int8_t edge = BALL_COLLISION_RADIUS_PIXELS;
+    int16_t edge = BALL_COLLISION_RADIUS_PIXELS * FIXED_ONE;
     uint8_t tile;
 
     if (velocity < 0) {
-        edge = -BALL_COLLISION_RADIUS_PIXELS;
+        edge = -BALL_COLLISION_RADIUS_PIXELS * FIXED_ONE;
     }
 
-    tile = ball_collision_tile_at_offset(x, y, -BALL_COLLISION_RADIUS_PIXELS, edge);
+    int16_t sample_y = (int16_t)y + edge;
+    tile = ball_collision_tile_at_sample((int16_t)x - BALL_COLLISION_RADIUS_PIXELS * FIXED_ONE, sample_y);
     if (tile == TILE_ID_WALL || terrain_tile_is_deflector(tile)) {
         return tile;
     }
 
-    tile = ball_collision_tile_at_offset(x, y, 0, edge);
+    tile = ball_collision_tile_at_sample((int16_t)x, sample_y);
     if (tile == TILE_ID_WALL || terrain_tile_is_deflector(tile)) {
         return tile;
     }
 
-    tile = ball_collision_tile_at_offset(x, y, BALL_COLLISION_RADIUS_PIXELS, edge);
+    tile = ball_collision_tile_at_sample((int16_t)x + BALL_COLLISION_RADIUS_PIXELS * FIXED_ONE, sample_y);
     if (tile == TILE_ID_WALL || terrain_tile_is_deflector(tile)) {
         return tile;
     }
@@ -155,15 +208,20 @@ static uint8_t ball_collision_tile_y(uint16_t x, uint16_t y, int16_t velocity)
 
 static uint8_t ball_over_hole(void)
 {
+    uint16_t vx = (uint16_t)physics_abs_i16(ball.vx) >> VELOCITY_TO_POSITION_SHIFT;
+    uint16_t vy = (uint16_t)physics_abs_i16(ball.vy) >> VELOCITY_TO_POSITION_SHIFT;
+    /* Most substeps of a hard shot are too fast to sink. Reject them before
+     * calculating the cup's fixed-point distance, with the same speed gate. */
+    if (vx > BALL_HOLE_MAX_SPEED || vy > BALL_HOLE_MAX_SPEED) {
+        return 0;
+    }
     const course_info_t* info = course_get_info();
     int16_t dx = (int16_t)ball.x - (int16_t)(coords_sprite_from_tile(info->hole_x) * FIXED_ONE);
     int16_t dy = (int16_t)ball.y - (int16_t)(coords_sprite_from_tile(info->hole_y) * FIXED_ONE);
     uint16_t ax = (uint16_t)physics_abs_i16(dx);
     uint16_t ay = (uint16_t)physics_abs_i16(dy);
     uint16_t radius = BALL_HOLE_RADIUS_PIXELS * FIXED_ONE;
-    uint16_t vx = (uint16_t)physics_abs_i16(ball.vx) >> VELOCITY_TO_POSITION_SHIFT;
-    uint16_t vy = (uint16_t)physics_abs_i16(ball.vy) >> VELOCITY_TO_POSITION_SHIFT;
-    if (ax > radius || ay > radius || vx > BALL_HOLE_MAX_SPEED || vy > BALL_HOLE_MAX_SPEED) {
+    if (ax > radius || ay > radius) {
         return 0;
     }
     return (uint8_t)(ax * ax + ay * ay <= radius * radius &&
@@ -237,12 +295,12 @@ static uint8_t start_ramp_jump(uint16_t previous_x, uint16_t previous_y)
     if (!ramp_can_start()) {
         return 0;
     }
-    tile_x = coords_fixed_to_center_tile(previous_x);
-    tile_y = coords_fixed_to_center_tile(previous_y);
     tile = ball_tile_at(previous_x, previous_y);
     if (!ramp_tile_is(tile) || !ramp_accepts_direction(tile, ball.vx, ball.vy)) {
         return 0;
     }
+    tile_x = coords_fixed_to_center_tile(previous_x);
+    tile_y = coords_fixed_to_center_tile(previous_y);
     if (tile == TILE_ID_RAMP_UP_LEFT || tile == TILE_ID_RAMP_UP_RIGHT) {
         crossed = (uint8_t)(coords_fixed_to_center_tile(ball.y) < tile_y);
     } else {
@@ -308,6 +366,7 @@ static int16_t frame_motion(int16_t velocity, int16_t* remainder)
  * remaining travel on a bank contact: never reflect twice in one frame. */
 static void move_ball(void)
 {
+    reset_sample_cache();
     int16_t remaining_x = frame_motion(ball.vx, &motion_remainder_x);
     int16_t remaining_y = frame_motion(ball.vy, &motion_remainder_y);
     uint16_t max = (uint16_t)physics_abs_i16(remaining_x);
@@ -380,6 +439,7 @@ static void move_ball(void)
 
 static void ball_set_position(uint16_t x, uint16_t y)
 {
+    reset_sample_cache();
     ball.x = (uint16_t)(x << FIXED_SHIFT);
     ball.y = (uint16_t)(y << FIXED_SHIFT);
     ball.vx = 0;
@@ -624,6 +684,7 @@ void objects_update_ball(void)
 
 void objects_update_aim_markers(void)
 {
+    reset_sample_cache();
     uint8_t i;
     uint8_t blocked = 0;
     int16_t dx = aim_vector_x();
