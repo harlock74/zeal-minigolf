@@ -54,23 +54,9 @@ zde cmake
 
 The playable binary is **`bin/zgolf`**. Load it in Zeal Native Emulator or run it on your Zeal 8-bit Computer.
 
-## Editing the Game
-
-Open `assets/minigolf.tiled-project` in Tiled:
-
-- `assets/minigolf.tmx` contains the 15 courses.
-- `assets/splash.tmx` contains the splash artwork, lettering, blinking prompt and ball path.
-- `assets/minigolf.aseprite` is the shared indexed atlas. The splash and HUD reuse its letters; there is no separate splash alphabet.
-
-After editing the Aseprite atlas, export it from Aseprite as the indexed `assets/minigolf.gif`, preserving its palette and tile layout. Run `zde cmake`; the standard SDK `gif2zeal.py` automatically converts that GIF into game assets. Map changes compile automatically. See [EDITING.md](./EDITING.md) for the tile IDs and animation controls.
-
 ## Attribution
 
 - Author: Zingot Games
 - License: CC-BY 4.0
 - Source: https://opengameart.org/content/bitmap-font-pack
 - A few changes to the original assets have been made including the color palette.
-
-## Editing game settings
-
-The build uses the SDK's GIF/Tiled converters. Fixed gameplay and animation settings live in `src/course_settings.c` (course names, par and tee/hole positions) and `src/splash_settings.h` (prompt and ball animation). No project metadata generator is required. Tiled objects are reference guides; moving one does not change the corresponding C settings automatically.
